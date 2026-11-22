@@ -10,6 +10,9 @@ Run everything with `./Scripts/test.ps1` (see `docs/development/building.md`).
 |---|---|---|
 | Unit / DSP | `Unit/DSP/ConversionsTests.cpp` | 12-TET reference pitches; note↔Hz round trip within 1e-9 semitone over notes -24…151; dB conversions and -inf handling |
 | Unit / DSP | `Unit/DSP/DenormalsTests.cpp` | Subnormals occur without the guard; `ScopedFlushDenormals` flushes them and restores the previous mode |
+| Unit / DSP | `Unit/DSP/SmootherTests.cpp` | Linear smoother lands exactly on target, is monotonic, retargets mid-ramp without jumps |
+| Unit / engine | `Unit/Engine/MidiParserTests.cpp` | Note On/Off (incl. velocity-0 Note On), channel extraction, CC64 threshold, CC120/121/123-127, rejection of unsupported/short/SysEx messages |
+| Engine | `Unit/Engine/EngineTests.cpp` | Silence without notes; pitch within 0.01 cent (55 Hz to 3.5 kHz); level vs velocity and master gain; sample-accurate events; **bit-identical output for block sizes 1/7/64/333/512/4096** (4096 > max block, exercises internal chunking); zero-length blocks still apply events; mono = L/R average; release to exact silence; FL Studio same-key overlap order; sustain pedal (incl. held keys on pedal-up); All Notes/Sound Off; voice stealing bound; gain smoothing; **no allocation in `process()`**; seeded MIDI fuzz (5 seeds × 1500 random blocks incl. empty and oversize blocks, pedal and All-Notes-Off): output finite and bounded, all 32 voices reached, zero voices and exact silence after releasing everything |
 | Unit / tooling | `Unit/Tooling/WavFileTests.cpp` | Float WAV round trip is bit-exact; invalid input, garbage and truncated files rejected |
 | Real-time safety | `RealtimeSafety/AllocationCounterTests.cpp` | The allocation counter sees zero for allocation-free code, detects new/delete, container growth and aligned new, observes only its own thread, and nests |
 
@@ -35,7 +38,23 @@ Limitation: direct `malloc`/`free` calls are not intercepted.
 | File | Purpose |
 |---|---|
 | `tests/test_metrics.py` | Validates the metrics on synthetic signals with known answers: frequency error < 0.001 Hz (41 Hz–18 kHz, non-coherent); amplitude within 1e-6; float64 sine THD < -180 dB; injected -60/-80 dB harmonics measured within 0.01 dB; tanh saturation detected; THD+N tracks injected -100 dB noise within 0.5 dB |
-| `tests/test_render_pipeline.py` | Runs `aurel_render` end to end at all six target sample rates: frequency error < 0.001 Hz, amplitude within 1e-6, THD+N < -130 dB, channels identical, silence exactly zero, invalid arguments rejected |
+| `tests/test_render_pipeline.py` | Runs `aurel_render` end to end at all six target sample rates: frequency error < 0.001 Hz, amplitude within 1e-6, THD+N < -130 dB, channels identical, silence exactly zero, invalid arguments rejected. **Engine note** (notes 45/69/93 at 44.1-192 kHz): pitch within 0.001 cent, amplitude 0.25 within 1e-5, THD+N < -130 dB |
+
+## Plugin validation (pluginval)
+
+`./Scripts/pluginval.ps1` runs Tracktion pluginval 1.0.4 at strictness 10 over sample rates 44.1/48/88.2/96/176.4/192 kHz and block sizes 32-2048: state save/restore, automation, parameter fuzzing, thread safety, bus layouts, editor open while processing.
+
+**M1 result (2026-11-22): passes in both Debug (JUCE assertions on, none hit) and Release.**
+
+Known gap: pluginval's *vst3 validator* step (Steinberg's official conformance validator) is **skipped**, because it needs a separately built validator binary. Planned as a follow-up.
+
+## Manual DAW testing
+
+FL Studio only, see [fl-studio-checklist.md](fl-studio-checklist.md).
+
+| Milestone | Date | Result |
+|---|---|---|
+| M1 | 2026-11-22 | All checks passed (reported by the user; sustain-pedal check applies only with a pedal-equipped controller) |
 
 ### Measured baseline (M0, 2026-11-22)
 

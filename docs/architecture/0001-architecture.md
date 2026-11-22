@@ -159,7 +159,7 @@ Unit, integration, MIDI fuzz, regression (spectral/RMS fingerprints with toleran
 | # | Milestone | Done when | Status |
 |---|---|---|---|
 | M0 | Foundation | One command configures, builds and tests | **Done** 2026-11-22 |
-| M1 | Minimal VST3 (poly sine, MIDI, APVTS) | pluginval passes; loads and plays in FL Studio | Planned |
+| M1 | Minimal VST3 (poly sine, MIDI, APVTS) | pluginval passes; loads and plays in FL Studio | **Done** 2026-11-22: pluginval strictness 10 (Debug + Release); FL Studio checklist passed |
 | M2 | Measurement harness + oscillators | Naive aliasing detected; chosen method meets target; tuning < 0.1 cent | Planned |
 | M3 | Filters | Response, stability, self-oscillation targets; beats JUCE baselines on measured criteria | Planned |
 | M4 | Voices + modulation | Fuzz tests clean; click-free steals; playable checkpoint | Planned |

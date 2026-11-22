@@ -32,6 +32,15 @@ The first configure fetches Catch2 v3.16.1 (network required once) and builds JU
 ./Scripts/test.ps1 -Config Release
 ```
 
+Plugin validation (downloads pinned pluginval 1.0.4 on first use, verifies its SHA-256):
+
+```powershell
+./Scripts/pluginval.ps1                 # Release, strictness 10, all six sample rates
+./Scripts/pluginval.ps1 -Config Debug   # Debug: JUCE assertions active
+```
+
+Reports go to `build/reports/pluginval-<Config>/`.
+
 Fast loop for DSP work (skips JUCE entirely):
 
 ```powershell
@@ -48,11 +57,24 @@ ctest --preset debug
 .venv/Scripts/python.exe -m pytest Scripts/analysis
 ```
 
+## Build outputs
+
+| Artefact | Path (under `build/vs2022/`) |
+|---|---|
+| VST3 plugin | `Source/Plugin/AUREL_artefacts/<Config>/VST3/AUREL.vst3` |
+| Standalone app | `Source/Plugin/AUREL_artefacts/<Config>/Standalone/AUREL.exe` |
+| Render tool | `Tools/Render/<Config>/aurel_render.exe` |
+| Tests | `Tests/<Config>/aurel_tests.exe` |
+
+Loading the plugin in FL Studio: see [../testing/fl-studio-checklist.md](../testing/fl-studio-checklist.md).
+
+The plugin's host identity is fixed by `PLUGIN_MANUFACTURER_CODE Aurl` / `PLUGIN_CODE Aur1` in `Source/Plugin/CMakeLists.txt` (VST3 class ID `ABCDEF019182FAEB4175726C41757231`). Never change these: hosts would treat AUREL as a different plugin and saved projects would lose it. The display names (`COMPANY_NAME`, `PRODUCT_NAME`) can still change before release.
+
 ## Presets
 
 | Configure preset | Build dir | Contents |
 |---|---|---|
-| `vs2022` | `build/vs2022` | Everything (JUCE, plugin from M1, tests, tools) |
+| `vs2022` | `build/vs2022` | Everything (JUCE, plugin, tests, tools) |
 | `vs2022-core` | `build/vs2022-core` | DSP core, tests, tools. No JUCE |
 
 ## VS Code

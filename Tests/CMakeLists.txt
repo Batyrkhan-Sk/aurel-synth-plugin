@@ -15,12 +15,15 @@ add_executable(aurel_tests
     Support/AllocationCounter.cpp
     Unit/DSP/ConversionsTests.cpp
     Unit/DSP/DenormalsTests.cpp
+    Unit/DSP/SmootherTests.cpp
+    Unit/Engine/EngineTests.cpp
+    Unit/Engine/MidiParserTests.cpp
     Unit/Tooling/WavFileTests.cpp
     RealtimeSafety/AllocationCounterTests.cpp)
 
 target_include_directories(aurel_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(aurel_tests PRIVATE
-    aurel::dsp
+    aurel::engine
     aurel::tooling
     Catch2::Catch2WithMain)
 aurel_configure_target(aurel_tests)
