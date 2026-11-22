@@ -110,6 +110,77 @@ def distortion(x: np.ndarray, sample_rate: int, f0: float | None = None,
     )
 
 
+def ideal_harmonic_amplitude(wave: str, k: int, pulse_width: float = 0.5) -> float:
+    """Peak amplitude of harmonic k of the ideal (continuous-time) +/-1 waveform."""
+    if wave == "saw":
+        return 2.0 / (np.pi * k)
+    if wave == "pulse":
+        return 4.0 / (np.pi * k) * abs(np.sin(np.pi * k * pulse_width))
+    if wave == "triangle":
+        return 8.0 / (np.pi ** 2 * k ** 2) if k % 2 else 0.0
+    if wave == "sine":
+        return 1.0 if k == 1 else 0.0
+    raise ValueError(wave)
+
+
+@dataclass(frozen=True)
+class AliasResult:
+    f0: float
+    alias_total_dbc: float    # all in-band non-harmonic power, re fundamental
+    alias_worst_dbc: float    # strongest single alias component, re fundamental
+    harmonic_error_10k_db: float  # max |level error| of harmonics <= 10 kHz vs ideal
+    harmonic_error_20k_db: float  # same, <= 20 kHz
+
+
+def alias_analysis(x: np.ndarray, sample_rate: int, f0: float, wave: str,
+                   pulse_width: float = 0.5, audible_hz: float = 20000.0) -> AliasResult:
+    """Aliasing that lands in the audible band (20 Hz .. audible_hz).
+
+    Everything that is not within +/-BAND_HALF_WIDTH_BINS of a true harmonic
+    (k*f0 below Nyquist) or DC counts as alias. Content between audible_hz
+    and Nyquist is ignored: in AUREL it is removed by the decimator.
+    """
+    spec = spectrum(x, sample_rate)
+    n = len(spec.power)
+    freqs = np.arange(n) * spec.bin_hz
+    hw = BAND_HALF_WIDTH_BINS
+
+    harmonic = np.zeros(n, dtype=bool)
+    for k in range(1, int((sample_rate / 2) // f0) + 1):
+        c = int(round(k * f0 / spec.bin_hz))
+        harmonic[max(0, c - hw): c + hw + 1] = True
+    harmonic[: hw + 1] = True  # DC band
+
+    alias_mask = (freqs >= 20.0) & (freqs <= audible_hz) & ~harmonic
+    p1 = spec.band_power(f0)
+    alias_power = float(np.sum(spec.power[alias_mask]))
+
+    masked = np.where(alias_mask, spec.power, 0.0)
+    local = np.convolve(masked, np.ones(2 * hw + 1), mode="same")
+    worst = float(local.max()) if local.size else 0.0
+
+    floor = 1e-30
+    a1 = ideal_harmonic_amplitude(wave, 1, pulse_width)
+    err10, err20 = 0.0, 0.0
+    for k in range(1, int(audible_hz // f0) + 1):
+        ideal = ideal_harmonic_amplitude(wave, k, pulse_width)
+        if ideal < 1e-3 * a1:
+            continue
+        measured = np.sqrt(2.0 * spec.band_power(k * f0))
+        err = abs(20.0 * np.log10(max(measured, floor) / ideal))
+        err20 = max(err20, err)
+        if k * f0 <= 10000.0:
+            err10 = max(err10, err)
+
+    return AliasResult(
+        f0=f0,
+        alias_total_dbc=10.0 * np.log10(max(alias_power, floor) / p1),
+        alias_worst_dbc=10.0 * np.log10(max(worst, floor) / p1),
+        harmonic_error_10k_db=err10,
+        harmonic_error_20k_db=err20,
+    )
+
+
 def peak(x: np.ndarray) -> float:
     return float(np.max(np.abs(x))) if len(x) else 0.0
 
