@@ -15,6 +15,7 @@ add_executable(aurel_tests
     Support/AllocationCounter.cpp
     Unit/DSP/ConversionsTests.cpp
     Unit/DSP/DenormalsTests.cpp
+    Unit/DSP/FilterTests.cpp
     Unit/DSP/HalfbandTests.cpp
     Unit/DSP/OscillatorTests.cpp
     Unit/DSP/SmootherTests.cpp

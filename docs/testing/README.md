@@ -44,7 +44,10 @@ Limitation: direct `malloc`/`free` calls are not intercepted.
 | `tests/test_metrics.py` (alias metric) | Ideal additive saw shows no alias (< −180 dBc) and exact harmonics; a planted −70 dBc alias is measured within 0.05 dB; content above 20 kHz is ignored |
 | `tests/test_oscillator_aliasing.py` | Production kernel (sinc6) worst in-band alias < −100 dBc and harmonic error < 0.1 dB at 88.2/96 kHz (saw, 10 % pulse, triangle; 440 Hz–C8); naive saw still detected as aliased |
 
+| `tests/test_m3.py` | Self-oscillating ladder in tune (< 1 cent at 220/880/3520 Hz); band-limited ladder alias < −90 dBc at default drive; Newton-2 within −70 dB of the converged solution in the hardest case |
 | `tests/test_m2b.py` | Complete engine (2× voice + decimator) alias < −110 dBc at 44.1/48 kHz; sync (saw/pulse/triangle) < −100 dBc; sine-carrier FM < −150 dBc; the two documented limitations (sine-slave sync, saw-carrier FM) must not regress |
+
+M3 C++ additions: `Unit/DSP/FilterTests.cpp`: SVF and ladder small-signal response vs analytic transfer functions (±0.01 dB, all modes/solvers), stability matrix (cutoff 20 Hz–43 kHz × k 0–6 × drive 0.25–16 × +12 dB input), 10-octave audio-rate cutoff sweeps at maximum resonance, Newton convergence (zero non-converged samples up to 43 kHz), self-oscillation tuning (≤ 4 cents, 3 rates × 3 resonances × 55 Hz–7 kHz), unity DC gain with bass compensation, no allocation. A hidden `[.diag]` case prints near-Nyquist solver behaviour.
 
 M2b C++ additions: `Unit/DSP/HalfbandTests.cpp` (decimator design validity, passband ±0.01 dB to 20 kHz, stopband < −100 dB, DC gain, stability), `Unit/DSP/SubNoiseTests.cpp` (sub locked to OSC1 at −1/−2 oct, exact sub sine, white-noise statistics and determinism, pink slope within ±0.5 dB of −3.01 dB/oct from 20 Hz to 20 kHz at 88.2/96/192 kHz, pink RMS = white RMS), and new cases in `OscillatorTests.cpp` and `EngineTests.cpp` (see [../dsp/oscillators-m2b.md](../dsp/oscillators-m2b.md)).
 

@@ -42,6 +42,9 @@ if(AUREL_BUILD_PLUGIN)
     endif()
     add_subdirectory(external/JUCE EXCLUDE_FROM_ALL)
     add_subdirectory(Source/Plugin)
+    if(AUREL_BUILD_TOOLS)
+        add_subdirectory(Tools/JuceBaseline)
+    endif()
 endif()
 
 # --- Tests ----------------------------------------------------------------

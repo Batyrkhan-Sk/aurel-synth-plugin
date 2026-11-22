@@ -15,6 +15,7 @@
 
 #include "DSP/Core/Denormals.h"
 #include "Engine/Engine.h"
+#include "FilterTools.h"
 #include "OscillatorTools.h"
 #include "WavFile.h"
 
@@ -46,6 +47,7 @@ struct Options
     double syncRatio = 0.0;
     double fmDepth = 0.0;
     double fmRatio = 1.0;
+    aurel::render::FilterRenderOptions filter;
     std::string bench;
     std::string outPath;
 };
@@ -54,8 +56,11 @@ void printUsage()
 {
     std::fputs (
         "usage: aurel_render --out <file.wav> [options]\n"
-        "       aurel_render --bench osc\n"
-        "  --signal   sine | silence | note | osc (default sine)\n"
+        "       aurel_render --bench osc | engine | filter\n"
+        "  --signal   sine | silence | note | osc | filter (default sine)\n"
+        "  filter:  --filter ladder|svf  --solver linear|newton  --mode lp24|lp12 (ladder), lp|bp|hp|notch (svf)\n"
+        "           --cutoff Hz  --feedback k  --res 0..1  --drive dB  --comp 0..1\n"
+        "           --input saw|sine|impulse (uses --freq and --amp)\n"
         "  --freq     Hz, sine / osc          (default 1000)\n"
         "  --wave     sine | triangle | saw | pulse; osc, or OSC1 for note (default saw)\n"
         "  --kernel   naive | polyblep2 | sinc4 | sinc6 | sinc8 | sinc12, osc only (default sinc6)\n"
@@ -132,6 +137,18 @@ bool parseArgs (int argc, char** argv, Options& o)
         else if (key == "--sync")     ok = parseNumber (val, o.syncRatio);
         else if (key == "--fm")       ok = parseNumber (val, o.fmDepth);
         else if (key == "--fm-ratio") ok = parseNumber (val, o.fmRatio);
+        else if (key == "--filter")   o.filter.filter = val;
+        else if (key == "--solver")   o.filter.solver = val;
+        else if (key == "--iterations") ok = parseNumber (val, o.filter.iterations);
+        else if (key == "--tuning")   ok = parseNumber (val, o.filter.tuning);
+        else if (key == "--mode")     o.filter.mode = val;
+        else if (key == "--cutoff")   ok = parseNumber (val, o.filter.cutoff);
+        else if (key == "--feedback") ok = parseNumber (val, o.filter.feedback);
+        else if (key == "--res")      ok = parseNumber (val, o.filter.resonance);
+        else if (key == "--drive")    ok = parseNumber (val, o.filter.driveDb);
+        else if (key == "--comp")     ok = parseNumber (val, o.filter.compensation);
+        else if (key == "--prefilter") ok = parseNumber (val, o.filter.prefilterHz);
+        else if (key == "--input")    o.filter.input = val;
         else if (key == "--bench")    o.bench = val;
         else
             return false;
@@ -141,7 +158,14 @@ bool parseArgs (int argc, char** argv, Options& o)
     }
 
     if (! o.bench.empty())
-        return o.bench == "osc" || o.bench == "engine";
+        return o.bench == "osc" || o.bench == "engine" || o.bench == "filter";
+
+    o.filter.frequency = o.frequency;
+    o.filter.amplitude = o.amplitude;
+    o.filter.sampleRate = o.sampleRate;
+    if (o.signal == "filter")
+        return ! o.outPath.empty() && (o.channels == 1 || o.channels == 2) && o.seconds > 0.0
+            && o.seconds <= 600.0 && aurel::render::isValidFilterOptions (o.filter);
 
     aurel::dsp::Waveform w {};
     const bool oscOk = (o.signal != "osc" && o.signal != "note")
@@ -261,6 +285,8 @@ int main (int argc, char** argv)
         return aurel::render::benchmarkOscillators();
     if (opts.bench == "engine")
         return benchmarkEngine();
+    if (opts.bench == "filter")
+        return aurel::render::benchmarkFilters();
 
     const aurel::dsp::ScopedFlushDenormals noDenormals;
 
@@ -286,6 +312,14 @@ int main (int argc, char** argv)
     else if (opts.signal == "note")
     {
         renderEngineNote (opts, audio);
+    }
+    else if (opts.signal == "filter")
+    {
+        std::vector<float> mono (frames);
+        (void) aurel::render::renderFilter (opts.filter, mono);
+        for (std::size_t n = 0; n < frames; ++n)
+            for (std::uint16_t c = 0; c < opts.channels; ++c)
+                audio.interleaved[n * opts.channels + c] = mono[n];
     }
     else if (opts.signal == "osc")
     {
