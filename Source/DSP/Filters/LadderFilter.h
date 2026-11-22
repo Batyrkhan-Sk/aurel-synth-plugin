@@ -36,6 +36,17 @@
 //
 // Gain staging: input * drive * kInputScale into the model's voltage domain,
 // divided back out at the output: drive changes saturation, not pass-band level.
+// Output gain = (1 + c * min(k, 4)) / (kInputScale * max(drive, 1)):
+//  * Bass compensation is applied at the OUTPUT. Applied at the input it
+//    would drive the first tanh stage harder as resonance rises (measured in
+//    M3b: +7 dB effective drive at k = 2.7, c = 0.5, costing 15-40 dB of
+//    alias rejection). It restores level; it must not add drive. It stops
+//    growing at the self-oscillation threshold k = 4.
+//  * Drive above 0 dB is level-compensated (more saturation, same level).
+//    Below 0 dB it is a plain input attenuator (cleaner and quieter).
+//    Full compensation there would amplify the self-oscillation, whose
+//    amplitude is set by the tanh stages and not by the input, to about
+//    +12 dBFS per voice at -12 dB drive.
 
 #include <algorithm>
 #include <array>
@@ -93,8 +104,10 @@ public:
             fc *= std::exp2 (-selfOscillationOffsetCents (k) / 1200.0);
         fc = std::clamp (fc, kMinCutoffHz, kMaxCutoffRatio * fs);
         g = std::tan (std::numbers::pi * fc / fs);
-        inputGain = std::max (drive, 1e-3) * kInputScale;
+        const double d = std::max (drive, 1e-3);
+        inputGain = d * kInputScale;
         compensation = std::clamp (bassCompensation, 0.0, 1.0);
+        outputGain = (1.0 + compensation * std::min (k, 4.0)) / (kInputScale * std::max (d, 1.0));
     }
 
     void setMode (Mode m) noexcept { mode = m; }
@@ -116,9 +129,22 @@ public:
         return (1.0 - t) * kSelfOscillationOffsetCents[i] + t * kSelfOscillationOffsetCents[i + 1];
     }
 
+    struct Taps
+    {
+        double lp24 = 0.0, lp12 = 0.0;
+    };
+
+    /** One sample; returns the output selected by setMode(). */
     double process (double input) noexcept
     {
-        const double xin = input * inputGain * (1.0 + compensation * k);
+        const auto t = processTaps (input);
+        return mode == Mode::LowPass24 ? t.lp24 : t.lp12;
+    }
+
+    /** One sample; returns both outputs (for crossfading between them). */
+    Taps processTaps (double input) noexcept
+    {
+        const double xin = input * inputGain;
 
         // --- Linearised closed-form solve (initial estimate) ---------------
         // Stage i's input estimate equals stage i-1's output estimate, so only
@@ -154,7 +180,7 @@ public:
         }
         uEst = xin - k * y[3];
 
-        return (mode == Mode::LowPass24 ? y[3] : y[1]) / inputGain;
+        return { y[3] * outputGain, y[1] * outputGain };
     }
 
     [[nodiscard]] int getLastIterations() const noexcept { return lastIterations; }
@@ -242,7 +268,7 @@ private:
     }
 
     double fs = 48000.0;
-    double g = 0.0, k = 0.0, inputGain = kInputScale, compensation = 0.0;
+    double g = 0.0, k = 0.0, inputGain = kInputScale, compensation = 0.0, outputGain = 1.0 / kInputScale;
     std::array<double, 4> s {}, yEst {};
     double uEst = 0.0;
     Mode mode = Mode::LowPass24;

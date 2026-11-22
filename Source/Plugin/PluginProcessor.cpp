@@ -35,6 +35,16 @@ AurelAudioProcessor::AurelAudioProcessor()
     noiseLevel = bind (ids::noiseLevel);
     noiseColor = bind (ids::noiseColor);
 
+    filter.type = bind (ids::filterType);
+    filter.cutoff = bind (ids::filterCutoff);
+    filter.resonance = bind (ids::filterResonance);
+    filter.drive = bind (ids::filterDrive);
+    filter.bassComp = bind (ids::filterBassComp);
+    filter.keyTrack = bind (ids::filterKeyTrack);
+    filter.svfMode = bind (ids::filterSvfMode);
+    filter.hpfCutoff = bind (ids::hpfCutoff);
+    filter.hpfResonance = bind (ids::hpfResonance);
+
     events.reserve (kEventCapacity);
 }
 
@@ -70,6 +80,17 @@ engine::EngineParameters AurelAudioProcessor::readParameters() const noexcept
 
     v.noiseLevel = get (noiseLevel) / 100.0f;
     v.noiseColor = static_cast<dsp::NoiseColor> (juce::jlimit (0, 1, index (noiseColor)));
+
+    auto& f = v.filter;
+    f.type = static_cast<engine::FilterType> (juce::jlimit (0, 3, index (filter.type)));
+    f.cutoffHz = get (filter.cutoff);
+    f.resonance = get (filter.resonance) / 100.0f;
+    f.driveDb = get (filter.drive);
+    f.bassCompensation = get (filter.bassComp) / 100.0f;
+    f.keyTracking = get (filter.keyTrack) / 100.0f;
+    f.svfMode = get (filter.svfMode);
+    f.hpfCutoffHz = get (filter.hpfCutoff);
+    f.hpfResonance = get (filter.hpfResonance) / 100.0f;
     return e;
 }
 

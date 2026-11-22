@@ -1,4 +1,4 @@
-# Filters (M3a): design, solver decision and validation
+# Filters (M3): design, solver decision, validation and voice integration
 
 Date: 2026-11-22. Code: `Source/DSP/Filters/`. Reproduce: `Scripts/analysis/m3_filter_measurements.py`, `m3_juce_comparison.py` (needs `aurel_juce_baseline`), `ladder_tuning_table.py`.
 
@@ -90,4 +90,43 @@ At default drive the ladder meets the −80 dBc target with 18–30 dB margin. *
 | `juce::dsp::LadderFilter` | k 0.7, drive 2 | 47 |
 | SVF | fixed / per-sample coefficients | 7 / 13 |
 
-**Cost is the open issue.** At 96 kHz the production ladder takes 1.7–3.8 % of a core per voice. Restructuring (shared tanh values, fewer divisions, no residual re-check after the last iteration) already cut it by 36–45 %. Remaining M5 work: a fast rational tanh (`std::tanh` slows down for large arguments), float/SIMD processing across voices, and per-block coefficient interpolation.
+## M3b: filter in the voice
+
+**Signal chain** (`Source/Engine/VoiceFilter.*`): mixer → (−120 dBFS noise floor) → series HPF → [20 kHz band limit → ladder 24/12] or [SVF morph] or Off → gate → out.
+
+| Design point | Choice | Why |
+|---|---|---|
+| Cutoff smoothing | 20 ms ramps in log2(Hz); coefficients recomputed every 16 internal samples | Even sweeps; avoids a `tan()` per sample per filter |
+| Type change | New filter warms up silently for 5 ms, then a 10 ms crossfade | A plain 5 ms crossfade still showed the new filter's start-from-zero ringing (max step 1.96× the signal's own). With warm-up: 1.58×. A hard switch: 27× |
+| Noise floor | −120 dBFS white noise into the filter | Lets the resonant filter self-oscillate with no oscillator input. Test: plays in tune from the keyboard via key tracking (< 3 cents, C3–A5) |
+| Resonance mapping | Ladder k = 4.5 × r (self-oscillation from r ≈ 89 %); SVF Q ≤ 25; HPF Q ≤ 5 | Usable range, with self-oscillation at the top of the knob |
+| HPF | 2-pole TPT HP, bypassed at its 20 Hz minimum ("Off") | Bit-identical bypass (test) |
+| **Ladder gain staging (changed in M3b)** | Output gain = (1 + c·min(k, 4)) / (0.5 · max(drive, 1)) | See below |
+
+**Bass compensation moved to the ladder output.** First implemented as input gain, it drove the first tanh stage +7 dB harder at k = 2.7, c = 0.5. End-to-end measurement showed the cost: 15–40 dB of alias rejection. Applied at the output it restores level without adding drive; the small-signal response is unchanged (analytic tests). Two more gain rules came from the stability matrix. The ladder's self-oscillation amplitude is fixed by the tanh stages, so full level compensation would make it scale with 1/drive (≈ +12 dBFS per voice at −12 dB drive). Therefore drive below 0 dB is a plain input attenuator, and compensation stops growing past k = 4.
+
+**End-to-end alias (saw, oscillator → 2× voice → filter → decimator → host rate, worst in-band, dBc):**
+
+| host | note | filter | cutoff | res | drive | input-side compensation (first version) | **output-side (final)** |
+|---|---|---|---|---|---|---|---|
+| 44.1 kHz | A4 | Ladder 24 | 5 kHz | 0.6 | 0 dB | −84.0 | **−106.5** |
+| 44.1 kHz | A7 | Ladder 24 | 12 kHz | 0.6 | 0 dB | −57.4 | **−78.1** |
+| 48 kHz | A5 | Ladder 24 | 3 kHz | 0.85 | 0 dB | −71.3 | **−109.5** |
+| 44.1 kHz | A3 | Ladder 12 | 2 kHz | 0.9 | 0 dB | −72.5 | **−92.3** |
+| 48 kHz | A4 | Ladder 24 | 5 kHz | 0.6 | +12 dB | −61.5 | **−78.4** |
+| 48 kHz | A6 | SVF | 8 kHz | 0.6 | 0 dB | −125.9 | −125.9 |
+
+High notes with an open, resonant ladder (A7: −78 dBc) and driven settings sit just under the −80 dBc target; both feed the M5 oversampling decision. With the ladder self-oscillating (k > 4) the alias metric does not apply: the filter's own tone is inharmonic by design.
+
+**CPU, whole engine (Release, i5-11400H, 48 kHz host, % of one core):**
+
+| patch | 1 voice | 8 voices | 16 voices | 32 voices |
+|---|---|---|---|---|
+| typical: 2 detuned saws → Ladder 24 | 3.7 | 25.4 | 59.1 | **109.4** |
+| full: all sources, sync, FM → Ladder 24 | 3.4 | 25.4 | 49.1 | **101.2** |
+
+## Cost: the main open issue
+
+At 96 kHz the production ladder takes 1.7–3.8 % of a core per voice, and the whole voice ≈ 3.2–3.7 %. **32 voices exceed one core. M5 must reduce voice cost by about 3×.** Candidates: SIMD across 4 voices, a fast rational tanh, float processing.
+
+Restructuring (shared tanh values, fewer divisions, no residual re-check after the last iteration) already cut it by 36–45 %. Remaining M5 work: a fast rational tanh (`std::tanh` slows down for large arguments), float/SIMD processing across voices, and per-block coefficient interpolation.

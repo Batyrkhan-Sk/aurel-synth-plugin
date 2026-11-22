@@ -44,8 +44,11 @@ Limitation: direct `malloc`/`free` calls are not intercepted.
 | `tests/test_metrics.py` (alias metric) | Ideal additive saw shows no alias (< −180 dBc) and exact harmonics; a planted −70 dBc alias is measured within 0.05 dB; content above 20 kHz is ignored |
 | `tests/test_oscillator_aliasing.py` | Production kernel (sinc6) worst in-band alias < −100 dBc and harmonic error < 0.1 dB at 88.2/96 kHz (saw, 10 % pulse, triangle; 440 Hz–C8); naive saw still detected as aliased |
 
+| `tests/test_m3b.py` | Whole voice with filter (oscillator → 2× → ladder/SVF → decimator), end-to-end alias guards for Ladder 24/12 and SVF at resonance 0.6–0.9 and +12 dB drive |
 | `tests/test_m3.py` | Self-oscillating ladder in tune (< 1 cent at 220/880/3520 Hz); band-limited ladder alias < −90 dBc at default drive; Newton-2 within −70 dB of the converged solution in the hardest case |
 | `tests/test_m2b.py` | Complete engine (2× voice + decimator) alias < −110 dBc at 44.1/48 kHz; sync (saw/pulse/triangle) < −100 dBc; sine-carrier FM < −150 dBc; the two documented limitations (sine-slave sync, saw-carrier FM) must not regress |
+
+M3b C++ additions: `Unit/Engine/VoiceFilterTests.cpp`: ladder attenuation in the voice, self-oscillating filter played in tune via key tracking with oscillators off (< 3 cents, C3–A5), click-free filter-type changes (max step < 1.7× the signal's own), HPF attenuation and bit-identical bypass at its minimum, bounded output under abrupt cutoff/resonance/type jumps at +24 dB drive.
 
 M3 C++ additions: `Unit/DSP/FilterTests.cpp`: SVF and ladder small-signal response vs analytic transfer functions (±0.01 dB, all modes/solvers), stability matrix (cutoff 20 Hz–43 kHz × k 0–6 × drive 0.25–16 × +12 dB input), 10-octave audio-rate cutoff sweeps at maximum resonance, Newton convergence (zero non-converged samples up to 43 kHz), self-oscillation tuning (≤ 4 cents, 3 rates × 3 resonances × 55 Hz–7 kHz), unity DC gain with bass compensation, no allocation. A hidden `[.diag]` case prints near-Nyquist solver behaviour.
 
@@ -69,6 +72,7 @@ FL Studio only, see [fl-studio-checklist.md](fl-studio-checklist.md).
 |---|---|---|
 | M1 | 2026-11-22 | All checks passed (reported by the user; sustain-pedal check applies only with a pedal-equipped controller) |
 | M2 | 2026-11-22 | Checks 14–24 passed (reported by the user) |
+| M3 | 2026-11-22 | Checks 25–34 passed (reported by the user) |
 
 ### Measured baseline (M0, 2026-11-22)
 

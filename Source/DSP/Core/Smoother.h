@@ -46,6 +46,18 @@ public:
         return current;
     }
 
+    /** Advances n samples at once (control-rate use); returns the new value. */
+    float skip (int n) noexcept
+    {
+        if (remaining > 0 && n > 0)
+        {
+            const int steps = std::min (n, remaining);
+            remaining -= steps;
+            current = remaining == 0 ? target : current + step * static_cast<float> (steps);
+        }
+        return current;
+    }
+
     [[nodiscard]] bool isSmoothing() const noexcept { return remaining > 0; }
     [[nodiscard]] float getCurrent() const noexcept { return current; }
     [[nodiscard]] float getTarget() const noexcept { return target; }

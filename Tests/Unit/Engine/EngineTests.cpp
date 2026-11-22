@@ -59,13 +59,22 @@ namespace
         return p;
     }
 
-    /** OSC1 sine only, 0 dB master: the voice is a pure, measurable tone. */
+    /** OSC1 sine only, filter off, 0 dB master: a pure, measurable tone. */
     EngineParameters unityGain()
     {
         EngineParameters p;
         p.masterGainDb = 0.0f;
         p.voice.osc[0].waveform = dsp::Waveform::Sine;
+        p.voice.filter.type = engine::FilterType::Off;
         return p;
+    }
+
+    double rms (const std::vector<float>& x, std::size_t from = 0)
+    {
+        double s = 0.0;
+        for (std::size_t i = from; i < x.size(); ++i)
+            s += static_cast<double> (x[i]) * x[i];
+        return std::sqrt (s / static_cast<double> (x.size() - from));
     }
 
     /** Below this an IIR decimator tail counts as silence (-160 dBFS). */
@@ -311,8 +320,10 @@ TEST_CASE ("Engine process path does not allocate", "[engine][rt-safety]")
     for (std::size_t i = 0; i < events.size(); ++i)
         events[i].sampleOffset = static_cast<int> (i * 300);
 
-    // Every source and modulation path active, with parameter changes mid-run.
+    // Every source, modulation path and filter active, with parameter changes mid-run.
     EngineParameters p;
+    p.voice.filter.hpfCutoffHz = 200.0f;
+    p.voice.filter.resonance = 0.8f;
     for (auto& o : p.voice.osc)
         o.level = 0.5f;
     p.voice.osc[1].waveform = dsp::Waveform::Pulse;
@@ -330,6 +341,8 @@ TEST_CASE ("Engine process path does not allocate", "[engine][rt-safety]")
         {
             p.voice.osc[0].waveform = block % 2 ? dsp::Waveform::Saw : dsp::Waveform::Pulse;
             p.voice.subOctave = 1 + block % 2;
+            p.voice.filter.type = static_cast<engine::FilterType> (block % 4); // all types + crossfades
+            p.voice.filter.cutoffHz = block % 2 ? 300.0f : 9000.0f;
             eng.process (events, l.data(), r.data(), block == 3 ? 4096 : 256, p); // includes chunking
         }
         allocs = counter.allocations();

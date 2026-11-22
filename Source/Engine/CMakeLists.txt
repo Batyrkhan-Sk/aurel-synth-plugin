@@ -4,6 +4,7 @@ add_library(aurel_engine STATIC
     Engine.cpp
     MidiParser.cpp
     Voice.cpp
+    VoiceFilter.cpp
     VoiceManager.cpp)
 add_library(aurel::engine ALIAS aurel_engine)
 

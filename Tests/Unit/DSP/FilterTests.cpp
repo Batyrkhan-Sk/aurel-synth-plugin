@@ -197,9 +197,9 @@ TEST_CASE ("Ladder stability matrix: bounded, finite output everywhere", "[dsp][
         }
         INFO ("solver " << static_cast<int> (solver) << ", k " << k << ", drive " << drive << ", fc " << fc
                         << ": peak " << peak);
-        // The tanh stages bound the model's internal state; after removing the
-        // input gain the output stays within a few units of the input scale.
-        CHECK (peak < 4.0 * (1.0 + 0.5 * k) / drive + 8.0);
+        // The tanh stages bound the model's internal state (|y| < ~3); the
+        // output gain is at most (1 + 0.5 * 4) / 0.5 = 6 here.
+        CHECK (peak < 20.0);
     }
 }
 

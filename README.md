@@ -2,7 +2,7 @@
 
 A virtual analog synthesizer plugin (VST3), built with C++20 and JUCE.
 
-**Status:** M2. Three band-limited oscillators (sine/triangle/saw/pulse, sync, through-zero FM, PWM), sub-oscillator and noise, voices running at 2× with a half-band decimator. No filter or envelopes yet (M3/M4). Roadmap: [docs/architecture/0001-architecture.md](docs/architecture/0001-architecture.md).
+**Status:** M3. Three band-limited oscillators, sub and noise; nonlinear transistor-ladder (24/12 dB, self-oscillating in tune) and multimode SVF filters with a series high-pass; voices at 2× with a half-band decimator. No envelopes / modulation yet (M4); CPU optimisation pending (M5). Roadmap: [docs/architecture/0001-architecture.md](docs/architecture/0001-architecture.md).
 
 ## Quick start (Windows)
 

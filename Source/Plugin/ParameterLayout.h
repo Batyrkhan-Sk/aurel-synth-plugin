@@ -30,6 +30,16 @@ namespace ids
     inline constexpr const char* noiseLevel = "noise_level";
     inline constexpr const char* noiseColor = "noise_color";
 
+    inline constexpr const char* filterType = "filter_type";
+    inline constexpr const char* filterCutoff = "filter_cutoff";
+    inline constexpr const char* filterResonance = "filter_resonance";
+    inline constexpr const char* filterDrive = "filter_drive";
+    inline constexpr const char* filterBassComp = "filter_bass_comp";
+    inline constexpr const char* filterKeyTrack = "filter_keytrack";
+    inline constexpr const char* filterSvfMode = "filter_svf_mode";
+    inline constexpr const char* hpfCutoff = "hpf_cutoff";
+    inline constexpr const char* hpfResonance = "hpf_resonance";
+
     /** "osc2_level" etc. index is 0-based. */
     juce::String osc (int index, const char* suffix);
 } // namespace ids

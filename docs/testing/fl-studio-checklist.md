@@ -51,4 +51,23 @@ The generic editor now shows parameters grouped by Oscillator 1–3, Sub, Noise 
 
 Known, expected: Osc 2 **Sine** + Sync at very high Semitone settings on high notes, and Osc 2 **Saw/Pulse** + strong FM on high notes, can sound slightly gritty. Documented; addressed in M5.
 
+## M3 checks (filters)
+
+New parameter group **Filter**. Init sound: Ladder 24, cutoff 20 kHz (open), resonance 0.
+
+| # | Check | Expected |
+|---|---|---|
+| 25 | Hold a saw chord, sweep **Filter Cutoff** from 20 kHz down to ~100 Hz | Smooth, even "wah" sweep down to a deep, round tone; no zipper noise or steps |
+| 26 | **Filter Resonance** 0 → 80 % while sweeping cutoff | Increasingly vocal, whistling peak |
+| 27 | **Resonance 100 %**, **Osc 1 Level 0**, **Key Tracking 100 %**, cutoff ~260 Hz, play a melody | The filter itself sings a sine-like tone that follows the keyboard in tune |
+| 28 | **Filter Drive** -12 → +24 dB on a bass note (cutoff ~800 Hz, resonance ~50 %) | From clean (and quieter) to thick and saturated; at +24 dB clearly distorted |
+| 29 | **Bass Compensation** 0 % vs 100 % at resonance ~70 % | 0 %: low end thins as resonance rises (classic ladder); 100 %: bass stays full |
+| 30 | While holding a note, switch **Filter Type** Ladder 24 → Ladder 12 → SVF → Off | Character changes; no clicks or pops at the switch |
+| 31 | **SVF**: sweep **SVF Mode** LP → BP → HP → Notch | Continuous morph through the four responses |
+| 32 | **High-Pass Cutoff** up to ~500 Hz on a bass sound; back to minimum ("Off") | Low end removed; at "Off" the full bass returns |
+| 33 | Automate Filter Cutoff with an automation clip | Follows smoothly |
+| 34 | Play 8-note chords, watch FL's CPU meter | Works; note the CPU figure (see below) |
+
+**Known, expected (M5):** CPU is high, about 3–4 % of one core per sounding voice. Big pads with 16 or more voices are heavy, and 32 voices can overload a core. Very high notes with an open, resonant ladder, or strong drive, can add slight grit. Both are scheduled for M5.
+
 Report anything unexpected with: check number, FL Studio version, sample rate, buffer size, what happened.

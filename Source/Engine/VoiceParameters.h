@@ -8,6 +8,7 @@
 #include "DSP/Oscillators/SubOscillator.h"
 
 #include <array>
+#include <cstdint>
 
 namespace aurel::engine
 {
@@ -20,6 +21,30 @@ struct OscillatorParameters
     float fineCents = 0.0f;   // -100 .. +100
     float pulseWidth = 0.5f;  // 0.01 .. 0.99
     float level = 0.0f;       // linear mixer gain, 0 .. 1
+};
+
+enum class FilterType : std::uint8_t
+{
+    Ladder24,
+    Ladder12,
+    StateVariable,
+    Off
+};
+
+struct FilterParameters
+{
+    static constexpr float kHpfOffHz = 20.0f;      // at or below: series HPF bypassed
+    static constexpr float kKeyTrackReferenceNote = 60.0f;
+
+    FilterType type = FilterType::Ladder24;
+    float cutoffHz = 20000.0f;
+    float resonance = 0.0f;       // 0..1 (ladder: self-oscillates near the top)
+    float driveDb = 0.0f;         // ladder input drive
+    float bassCompensation = 0.5f;
+    float keyTracking = 0.0f;     // 0..1: cutoff follows the note (1 = 1 octave per octave)
+    float svfMode = 0.0f;         // 0 LP, 1 BP, 2 HP, 3 notch (continuous)
+    float hpfCutoffHz = kHpfOffHz;
+    float hpfResonance = 0.0f;    // 0..1
 };
 
 struct VoiceParameters
@@ -37,6 +62,8 @@ struct VoiceParameters
 
     dsp::NoiseColor noiseColor = dsp::NoiseColor::White;
     float noiseLevel = 0.0f;
+
+    FilterParameters filter;
 };
 
 } // namespace aurel::engine

@@ -22,6 +22,7 @@ add_executable(aurel_tests
     Unit/DSP/SubNoiseTests.cpp
     Unit/Engine/EngineTests.cpp
     Unit/Engine/MidiParserTests.cpp
+    Unit/Engine/VoiceFilterTests.cpp
     Unit/Tooling/WavFileTests.cpp
     RealtimeSafety/AllocationCounterTests.cpp)
 

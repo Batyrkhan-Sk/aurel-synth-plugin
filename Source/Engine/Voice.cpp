@@ -17,6 +17,7 @@ void Voice::prepare (double internalSampleRate, std::uint32_t noiseSeed, double 
         o.prepare();
     sub.prepare();
     noise.prepare (sampleRate, noiseSeed, pinkGain);
+    filter.prepare (sampleRate, noiseSeed ^ 0xA5A5A5A5u);
 
     for (auto& s : level)
         s.prepare (sampleRate, kParameterRampSeconds);
@@ -56,6 +57,7 @@ void Voice::start (int newNote, int newChannel, float velocity, std::uint64_t ne
             osc[i].reset (0.0);
         }
         sub.reset();
+        filter.reset (p.filter, newNote);
     }
 
     updateIncrements (p);
@@ -123,6 +125,7 @@ void Voice::render (float* left, float* right, int numSamples, const VoiceParame
     applyDiscreteParameters (p);
     updateIncrements (p);
     setSmootherTargets (p, false);
+    filter.setTargets (p.filter, note);
 
     auto sourceActive = [this] (int s) {
         const auto& sm = level[static_cast<std::size_t> (s)];
@@ -179,7 +182,7 @@ void Voice::render (float* left, float* right, int numSamples, const VoiceParame
         if (noiseOn)
             mix += ln * noise.process();
 
-        const float s = mix * envelope * velocityLevel;
+        const float s = filter.process (mix) * envelope * velocityLevel;
         left[i] += s;
         right[i] += s;
     }

@@ -3,8 +3,8 @@
 // One synth voice at the internal (oversampled) rate:
 //
 //   OSC1 --+--> sync / FM --> OSC2 --+
-//          +--> SUB                  +--> MIXER --> gate envelope --> out (mono, added to L and R)
-//   OSC3 ----------------------------+
+//          +--> SUB                  +--> MIXER --> FILTER (VoiceFilter) --> gate envelope --> out
+//   OSC3 ----------------------------+                                       (mono, added to L and R)
 //   NOISE ---------------------------+
 //
 // The gate envelope (fixed linear attack/release) is TEMPORARY until the
@@ -16,6 +16,7 @@
 // One oscillator at level 1 always yields the same mixer output level.
 
 #include "DSP/Core/Smoother.h"
+#include "Engine/VoiceFilter.h"
 #include "Engine/VoiceParameters.h"
 
 #include <array>
@@ -71,6 +72,7 @@ private:
     std::array<dsp::Oscillator, 3> osc {};
     dsp::SubOscillator<dsp::OscillatorKernel> sub;
     dsp::NoiseGenerator noise;
+    VoiceFilter filter;
 
     std::array<double, 3> increment {};
     std::array<dsp::LinearSmoother, NumSources> level {};

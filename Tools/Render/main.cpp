@@ -48,6 +48,7 @@ struct Options
     double fmDepth = 0.0;
     double fmRatio = 1.0;
     aurel::render::FilterRenderOptions filter;
+    std::string voiceFilter = "off"; // note signal: off | ladder24 | ladder12 | svf
     std::string bench;
     std::string outPath;
 };
@@ -61,6 +62,7 @@ void printUsage()
         "  filter:  --filter ladder|svf  --solver linear|newton  --mode lp24|lp12 (ladder), lp|bp|hp|notch (svf)\n"
         "           --cutoff Hz  --feedback k  --res 0..1  --drive dB  --comp 0..1\n"
         "           --input saw|sine|impulse (uses --freq and --amp)\n"
+        "  note:    --voice-filter off|ladder24|ladder12|svf (default off) with --cutoff --res --drive --comp\n"
         "  --freq     Hz, sine / osc          (default 1000)\n"
         "  --wave     sine | triangle | saw | pulse; osc, or OSC1 for note (default saw)\n"
         "  --kernel   naive | polyblep2 | sinc4 | sinc6 | sinc8 | sinc12, osc only (default sinc6)\n"
@@ -149,6 +151,7 @@ bool parseArgs (int argc, char** argv, Options& o)
         else if (key == "--comp")     ok = parseNumber (val, o.filter.compensation);
         else if (key == "--prefilter") ok = parseNumber (val, o.filter.prefilterHz);
         else if (key == "--input")    o.filter.input = val;
+        else if (key == "--voice-filter") o.voiceFilter = val;
         else if (key == "--bench")    o.bench = val;
         else
             return false;
@@ -191,6 +194,17 @@ void renderEngineNote (const Options& o, aurel::tooling::AudioData& audio)
     params.masterGainDb = 0.0f;
     (void) aurel::render::parseWaveform (o.wave, params.voice.osc[0].waveform);
 
+    // Voice filter: off unless requested, so oscillator measurements stay pure.
+    auto& vf = params.voice.filter;
+    vf.type = o.voiceFilter == "ladder24" ? aurel::engine::FilterType::Ladder24
+            : o.voiceFilter == "ladder12" ? aurel::engine::FilterType::Ladder12
+            : o.voiceFilter == "svf"      ? aurel::engine::FilterType::StateVariable
+                                          : aurel::engine::FilterType::Off;
+    vf.cutoffHz = static_cast<float> (o.filter.cutoff);
+    vf.resonance = static_cast<float> (o.filter.resonance);
+    vf.driveDb = static_cast<float> (o.filter.driveDb);
+    vf.bassCompensation = static_cast<float> (o.filter.compensation);
+
     aurel::engine::Event on;
     on.type = aurel::engine::EventType::NoteOn;
     on.note = static_cast<std::uint8_t> (o.note);
@@ -231,19 +245,31 @@ int benchmarkEngine()
     constexpr int block = 512;
     constexpr double seconds = 10.0;
 
-    aurel::engine::EngineParameters p;
-    for (auto& o : p.voice.osc)
+    // "full": every source, sync + FM, ladder. "typical": two detuned saws
+    // into the ladder (a common bass/lead/pad starting point).
+    aurel::engine::EngineParameters full;
+    for (auto& o : full.voice.osc)
         o.level = 0.5f;
-    p.voice.osc[1].waveform = aurel::dsp::Waveform::Pulse;
-    p.voice.osc2Sync = true;
-    p.voice.osc2FmDepth = 1.0f;
-    p.voice.subLevel = 0.5f;
-    p.voice.noiseLevel = 0.2f;
-    p.voice.noiseColor = aurel::dsp::NoiseColor::Pink;
+    full.voice.osc[1].waveform = aurel::dsp::Waveform::Pulse;
+    full.voice.osc2Sync = true;
+    full.voice.osc2FmDepth = 1.0f;
+    full.voice.subLevel = 0.5f;
+    full.voice.noiseLevel = 0.2f;
+    full.voice.noiseColor = aurel::dsp::NoiseColor::Pink;
+    full.voice.filter.cutoffHz = 3000.0f;
+    full.voice.filter.resonance = 0.5f;
 
-    std::printf ("%-8s %14s %16s\n", "voices", "% of realtime", "% per voice");
+    aurel::engine::EngineParameters typical;
+    typical.voice.osc[1].level = 1.0f;
+    typical.voice.osc[1].fineCents = 7.0f;
+    typical.voice.filter.cutoffHz = 3000.0f;
+    typical.voice.filter.resonance = 0.5f;
+
+    std::printf ("%-8s %-8s %14s %16s\n", "patch", "voices", "% of realtime", "% per voice");
+    for (const auto* patch : { &typical, &full })
     for (const int voices : { 1, 8, 16, 32 })
     {
+        const auto& p = *patch;
         aurel::engine::Engine engine;
         engine.prepare (rate, block);
         std::vector<aurel::engine::Event> on;
@@ -265,7 +291,7 @@ int benchmarkEngine()
         const auto t1 = std::chrono::steady_clock::now();
 
         const double pct = 100.0 * std::chrono::duration<double> (t1 - t0).count() / seconds;
-        std::printf ("%-8d %14.2f %16.3f\n", voices, pct, pct / voices);
+        std::printf ("%-8s %-8d %14.2f %16.3f\n", patch == &full ? "full" : "typical", voices, pct, pct / voices);
     }
     return 0;
 }

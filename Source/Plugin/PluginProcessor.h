@@ -72,6 +72,19 @@ private:
     std::atomic<float>* noiseLevel = nullptr;
     std::atomic<float>* noiseColor = nullptr;
 
+    struct FilterBinding
+    {
+        std::atomic<float>* type = nullptr;
+        std::atomic<float>* cutoff = nullptr;
+        std::atomic<float>* resonance = nullptr;
+        std::atomic<float>* drive = nullptr;
+        std::atomic<float>* bassComp = nullptr;
+        std::atomic<float>* keyTrack = nullptr;
+        std::atomic<float>* svfMode = nullptr;
+        std::atomic<float>* hpfCutoff = nullptr;
+        std::atomic<float>* hpfResonance = nullptr;
+    } filter;
+
     engine::Engine engine;
     std::vector<engine::Event> events; // capacity reserved in the constructor
 
