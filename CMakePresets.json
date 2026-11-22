@@ -1,0 +1,48 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 22, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "vs2022",
+      "displayName": "Visual Studio 2022 x64",
+      "description": "Multi-config MSVC build (Debug / Release / RelWithDebInfo)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/vs2022",
+      "cacheVariables": {
+        "AUREL_BUILD_TESTS": "ON",
+        "AUREL_BUILD_TOOLS": "ON",
+        "AUREL_BUILD_PLUGIN": "ON"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "vs2022-core",
+      "inherits": "vs2022",
+      "displayName": "Visual Studio 2022 x64 (core only, no JUCE)",
+      "description": "Fast configure for DSP/engine work: skips JUCE and the plugin",
+      "binaryDir": "${sourceDir}/build/vs2022-core",
+      "cacheVariables": { "AUREL_BUILD_PLUGIN": "OFF" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug",   "configurePreset": "vs2022", "configuration": "Debug" },
+    { "name": "release", "configurePreset": "vs2022", "configuration": "Release" },
+    { "name": "core-debug",   "configurePreset": "vs2022-core", "configuration": "Debug" },
+    { "name": "core-release", "configurePreset": "vs2022-core", "configuration": "Release" }
+  ],
+  "testPresets": [
+    {
+      "name": "debug", "configurePreset": "vs2022", "configuration": "Debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "release", "configurePreset": "vs2022", "configuration": "Release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "core-debug", "configurePreset": "vs2022-core", "configuration": "Debug",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

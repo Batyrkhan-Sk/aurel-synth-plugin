@@ -1,0 +1,5 @@
+# Pinned for reproducible measurements. Install with Scripts/setup-python.ps1.
+numpy==2.4.6
+scipy==1.17.1
+matplotlib==3.11.2
+pytest==9.2.0

@@ -1,0 +1,21 @@
+# Build output
+/build/
+/out/
+
+# IDE
+/.vs/
+*.user
+*.suo
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Python
+/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Analysis / render output (regenerated, never committed)
+/renders/
+/reports/
