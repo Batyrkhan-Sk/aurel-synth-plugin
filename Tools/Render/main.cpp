@@ -4,13 +4,18 @@
 //   sine    - double-precision reference sine (validates the pipeline)
 //   silence - all zeros
 //   note    - one held note rendered through the AUREL engine
+//   osc     - raw oscillator with a chosen anti-aliasing kernel
 //
 //   aurel_render --signal sine --freq 1000 --amp 0.5 --rate 48000
 //                --seconds 2 --channels 2 --out renders/sine.wav
 //   aurel_render --signal note --note 69 --rate 48000 --out renders/a4.wav
+//   aurel_render --signal osc --wave saw --kernel sinc8 --freq 3520
+//                --rate 96000 --out renders/saw.wav
+//   aurel_render --bench osc          (oscillator CPU table, Release build)
 
 #include "DSP/Core/Denormals.h"
 #include "Engine/Engine.h"
+#include "OscillatorTools.h"
 #include "WavFile.h"
 
 #include <vector>
@@ -34,6 +39,10 @@ struct Options
     double seconds = 1.0;
     std::uint16_t channels = 2;
     int note = 69;
+    std::string wave = "saw";
+    std::string kernel = "polyblep2";
+    double pulseWidth = 0.5;
+    std::string bench;
     std::string outPath;
 };
 
@@ -41,8 +50,12 @@ void printUsage()
 {
     std::fputs (
         "usage: aurel_render --out <file.wav> [options]\n"
-        "  --signal   sine | silence | note   (default sine)\n"
-        "  --freq     Hz, sine only           (default 1000)\n"
+        "       aurel_render --bench osc\n"
+        "  --signal   sine | silence | note | osc (default sine)\n"
+        "  --freq     Hz, sine / osc          (default 1000)\n"
+        "  --wave     sine | triangle | saw | pulse, osc only (default saw)\n"
+        "  --kernel   naive | polyblep2 | sinc4 | sinc6 | sinc8 | sinc12 (default polyblep2)\n"
+        "  --pw       pulse width 0.01..0.99, osc only (default 0.5)\n"
         "  --amp      sine: peak amplitude; note: velocity 0..1 (default 0.5)\n"
         "  --note     MIDI note, note only    (default 69)\n"
         "  --rate     sample rate in Hz       (default 48000)\n"
@@ -106,6 +119,10 @@ bool parseArgs (int argc, char** argv, Options& o)
         else if (key == "--seconds")  ok = parseNumber (val, o.seconds);
         else if (key == "--channels") ok = parseNumber (val, o.channels);
         else if (key == "--note")     ok = parseNumber (val, o.note);
+        else if (key == "--wave")     o.wave = val;
+        else if (key == "--kernel")   o.kernel = val;
+        else if (key == "--pw")       ok = parseNumber (val, o.pulseWidth);
+        else if (key == "--bench")    o.bench = val;
         else
             return false;
 
@@ -113,7 +130,16 @@ bool parseArgs (int argc, char** argv, Options& o)
             return false;
     }
 
-    return ! o.outPath.empty() && (o.signal == "sine" || o.signal == "silence" || o.signal == "note")
+    if (! o.bench.empty())
+        return o.bench == "osc";
+
+    aurel::dsp::Waveform w {};
+    const bool oscOk = o.signal != "osc"
+                    || (aurel::render::parseWaveform (o.wave, w) && aurel::render::isKnownKernel (o.kernel)
+                        && o.pulseWidth >= 0.01 && o.pulseWidth <= 0.99);
+
+    return ! o.outPath.empty() && oscOk
+        && (o.signal == "sine" || o.signal == "silence" || o.signal == "note" || o.signal == "osc")
         && o.sampleRate >= 8000 && o.seconds > 0.0 && o.seconds <= 600.0
         && (o.channels == 1 || o.channels == 2)
         && o.frequency > 0.0 && o.frequency < o.sampleRate * 0.5
@@ -169,6 +195,9 @@ int main (int argc, char** argv)
         return 1;
     }
 
+    if (opts.bench == "osc")
+        return aurel::render::benchmarkOscillators();
+
     const aurel::dsp::ScopedFlushDenormals noDenormals;
 
     aurel::tooling::AudioData audio;
@@ -193,6 +222,17 @@ int main (int argc, char** argv)
     else if (opts.signal == "note")
     {
         renderEngineNote (opts, audio);
+    }
+    else if (opts.signal == "osc")
+    {
+        aurel::dsp::Waveform w {};
+        (void) aurel::render::parseWaveform (opts.wave, w);
+        std::vector<float> mono (frames);
+        (void) aurel::render::renderOscillator (opts.kernel, w, opts.frequency, opts.pulseWidth,
+                                                opts.sampleRate, mono);
+        for (std::size_t n = 0; n < frames; ++n)
+            for (std::uint16_t c = 0; c < opts.channels; ++c)
+                audio.interleaved[n * opts.channels + c] = mono[n];
     }
 
     if (! aurel::tooling::writeWavFloat32 (opts.outPath, audio))

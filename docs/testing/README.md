@@ -10,6 +10,7 @@ Run everything with `./Scripts/test.ps1` (see `docs/development/building.md`).
 |---|---|---|
 | Unit / DSP | `Unit/DSP/ConversionsTests.cpp` | 12-TET reference pitches; note↔Hz round trip within 1e-9 semitone over notes -24…151; dB conversions and -inf handling |
 | Unit / DSP | `Unit/DSP/DenormalsTests.cpp` | Subnormals occur without the guard; `ScopedFlushDenormals` flushes them and restores the previous mode |
+| Unit / DSP | `Unit/DSP/OscillatorTests.cpp` | BLEP/BLAMP kernels vanish at the support ends, give the midpoint at the step, and are odd/even symmetric; band-limited output is identical to the naive waveform away from discontinuities (polyblep2, sinc4, sinc8; saw/pulse/triangle); zero DC; pulse-width mean; peaks ≤ 1.2 (Gibbs ≈ 1.18 is correct); exact sine; no allocation |
 | Unit / DSP | `Unit/DSP/SmootherTests.cpp` | Linear smoother lands exactly on target, is monotonic, retargets mid-ramp without jumps |
 | Unit / engine | `Unit/Engine/MidiParserTests.cpp` | Note On/Off (incl. velocity-0 Note On), channel extraction, CC64 threshold, CC120/121/123-127, rejection of unsupported/short/SysEx messages |
 | Engine | `Unit/Engine/EngineTests.cpp` | Silence without notes; pitch within 0.01 cent (55 Hz to 3.5 kHz); level vs velocity and master gain; sample-accurate events; **bit-identical output for block sizes 1/7/64/333/512/4096** (4096 > max block, exercises internal chunking); zero-length blocks still apply events; mono = L/R average; release to exact silence; FL Studio same-key overlap order; sustain pedal (incl. held keys on pedal-up); All Notes/Sound Off; voice stealing bound; gain smoothing; **no allocation in `process()`**; seeded MIDI fuzz (5 seeds × 1500 random blocks incl. empty and oversize blocks, pedal and All-Notes-Off): output finite and bounded, all 32 voices reached, zero voices and exact silence after releasing everything |
@@ -39,6 +40,11 @@ Limitation: direct `malloc`/`free` calls are not intercepted.
 |---|---|
 | `tests/test_metrics.py` | Validates the metrics on synthetic signals with known answers: frequency error < 0.001 Hz (41 Hz–18 kHz, non-coherent); amplitude within 1e-6; float64 sine THD < -180 dB; injected -60/-80 dB harmonics measured within 0.01 dB; tanh saturation detected; THD+N tracks injected -100 dB noise within 0.5 dB |
 | `tests/test_render_pipeline.py` | Runs `aurel_render` end to end at all six target sample rates: frequency error < 0.001 Hz, amplitude within 1e-6, THD+N < -130 dB, channels identical, silence exactly zero, invalid arguments rejected. **Engine note** (notes 45/69/93 at 44.1-192 kHz): pitch within 0.001 cent, amplitude 0.25 within 1e-5, THD+N < -130 dB |
+
+| `tests/test_metrics.py` (alias metric) | Ideal additive saw shows no alias (< −180 dBc) and exact harmonics; a planted −70 dBc alias is measured within 0.05 dB; content above 20 kHz is ignored |
+| `tests/test_oscillator_aliasing.py` | Production kernel (sinc6) worst in-band alias < −100 dBc and harmonic error < 0.1 dB at 88.2/96 kHz (saw, 10 % pulse, triangle; 440 Hz–C8); naive saw still detected as aliased |
+
+The full kernel comparison (`Scripts/analysis/oscillator_aliasing.py`) is a report generator, not a test; see [../dsp/oscillator-antialiasing.md](../dsp/oscillator-antialiasing.md).
 
 ## Plugin validation (pluginval)
 

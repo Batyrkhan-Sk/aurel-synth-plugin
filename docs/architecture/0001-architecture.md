@@ -52,7 +52,7 @@ The voice path is mono up to the pan stage (halves per-voice filter cost). Stere
 * OSC3 gets a compact UI panel.
 * Sync/FM pairs are fixed (OSC1 → OSC2) by design.
 
-**Anti-aliasing [X]:** implement 2-point PolyBLEP/PolyBLAMP as a baseline, then a tabulated higher-order BLEP (windowed-sinc / MinBLEP). Keep whichever wins on measured alias power per unit CPU against a float64 additive reference. BLIT and naive+oversampling rejected. Sine needs no correction.
+**Anti-aliasing: decided 2026-11-22 (M2a): `SincBlep<6>`**, a tabulated Kaiser-windowed-sinc BLEP/BLAMP. Worst in-band alias ≤ −110 dBc at the internal rate; 2-point PolyBLEP measured −42 to −53 dBc and was rejected. Evidence and CPU data: [docs/dsp/oscillator-antialiasing.md](../dsp/oscillator-antialiasing.md). The same measurement confirms D4 (2× internal rate): no kernel meets the target at 1× 44.1/48 kHz.
 
 ## 4. Filters
 
@@ -160,7 +160,7 @@ Unit, integration, MIDI fuzz, regression (spectral/RMS fingerprints with toleran
 |---|---|---|---|
 | M0 | Foundation | One command configures, builds and tests | **Done** 2026-11-22 |
 | M1 | Minimal VST3 (poly sine, MIDI, APVTS) | pluginval passes; loads and plays in FL Studio | **Done** 2026-11-22: pluginval strictness 10 (Debug + Release); FL Studio checklist passed |
-| M2 | Measurement harness + oscillators | Naive aliasing detected; chosen method meets target; tuning < 0.1 cent | Planned |
+| M2 | Measurement harness + oscillators | Naive aliasing detected; chosen method meets target; tuning < 0.1 cent | **M2a done** (kernel chosen: sinc6); M2b (sync, FM, sub, noise, mixer, 2× voice rate + decimator) next |
 | M3 | Filters | Response, stability, self-oscillation targets; beats JUCE baselines on measured criteria | Planned |
 | M4 | Voices + modulation | Fuzz tests clean; click-free steals; playable checkpoint | Planned |
 | M5 | Quality + performance | Benchmark report; polyphony/oversampling decided from data | Planned |
