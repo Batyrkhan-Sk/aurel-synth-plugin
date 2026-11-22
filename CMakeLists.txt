@@ -25,7 +25,7 @@ include(AurelCompilerSettings)
 
 # --- JUCE-free core -------------------------------------------------------
 add_subdirectory(Source/DSP)
-# Source/Engine (voices, MIDI events, engine) arrives in milestone M1.
+add_subdirectory(Source/Engine)
 
 # --- Tooling shared by tests and offline tools -----------------------------
 add_subdirectory(Tools/Common)
@@ -41,7 +41,7 @@ if(AUREL_BUILD_PLUGIN)
             "JUCE submodule missing. Run: git submodule update --init --depth 1")
     endif()
     add_subdirectory(external/JUCE EXCLUDE_FROM_ALL)
-    # Plugin target is added in milestone M1 (Source/Plugin).
+    add_subdirectory(Source/Plugin)
 endif()
 
 # --- Tests ----------------------------------------------------------------

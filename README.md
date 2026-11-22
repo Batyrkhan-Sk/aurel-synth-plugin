@@ -2,7 +2,7 @@
 
 A virtual analog synthesizer plugin (VST3), built with C++20 and JUCE.
 
-**Status:** M0 (project foundation) complete. No synthesis or plugin target yet; see the roadmap in [docs/architecture/0001-architecture.md](docs/architecture/0001-architecture.md).
+**Status:** M1. A minimal VST3 instrument (polyphonic sine test voice, MIDI, one host parameter) builds and passes pluginval at strictness 10. It is not yet a usable synthesizer. Roadmap: [docs/architecture/0001-architecture.md](docs/architecture/0001-architecture.md).
 
 ## Quick start (Windows)
 
@@ -20,6 +20,8 @@ Details: [docs/development/building.md](docs/development/building.md).
 | Path | Contents |
 |---|---|
 | `Source/DSP/` | `aurel_dsp`: JUCE-free DSP core |
+| `Source/Engine/` | `aurel_engine`: voices, MIDI parsing, engine (JUCE-free) |
+| `Source/Plugin/` | JUCE plugin: processor, parameters, state |
 | `Tools/Common/` | helpers shared by tests and tools (WAV I/O) |
 | `Tools/Render/` | `aurel_render`: offline renderer for measurement |
 | `Tests/` | Catch2 suite: unit and real-time-safety tests |
@@ -33,4 +35,5 @@ Details: [docs/development/building.md](docs/development/building.md).
 * [Architecture (ADR 0001)](docs/architecture/0001-architecture.md)
 * [Building](docs/development/building.md)
 * [Testing and measurement](docs/testing/README.md)
+* [FL Studio checklist](docs/testing/fl-studio-checklist.md)
 * [Third-party dependencies](docs/development/third-party.md)

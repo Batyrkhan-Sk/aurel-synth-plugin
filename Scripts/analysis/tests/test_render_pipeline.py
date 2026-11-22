@@ -62,6 +62,24 @@ def test_reference_sine_measures_correctly(tmp_path, rate, freq):
     assert abs(metrics.dc_offset(x[:, 0])) < 1e-6
 
 
+@pytest.mark.parametrize("rate", [44100, 48000, 96000, 192000])
+@pytest.mark.parametrize("note", [45, 69, 93])
+def test_engine_note_pitch_level_and_purity(tmp_path, rate, note):
+    # M1 voice: sine with a 2 ms attack. Analyse after the attack so the
+    # envelope's amplitude modulation is excluded.
+    x, sr = render(tmp_path, signal="note", note=note, amp=1.0, rate=rate,
+                   seconds=1, channels=2)
+    assert np.array_equal(x[:, 0], x[:, 1])
+    steady = x[int(0.05 * sr):, 0]
+
+    expected_hz = 440.0 * 2 ** ((note - 69) / 12)
+    r = metrics.distortion(steady, sr)
+    cents = 1200 * np.log2(r.fundamental_hz / expected_hz)
+    assert abs(cents) < 0.001
+    assert r.fundamental_amplitude == pytest.approx(0.25, rel=1e-5)  # Voice::kVelocityGain
+    assert r.thd_n_db < -130.0
+
+
 def test_silence_is_exactly_zero(tmp_path):
     x, _ = render(tmp_path, signal="silence", rate=48000, seconds=0.5, channels=1)
     assert x.shape == (24000, 1)
