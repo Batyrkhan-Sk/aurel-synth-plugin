@@ -3,10 +3,11 @@
 namespace aurel::engine
 {
 
-void VoiceManager::prepare (double sampleRate) noexcept
+void VoiceManager::prepare (double sampleRate)
 {
-    for (auto& v : voices)
-        v.prepare (sampleRate);
+    const double pinkGain = dsp::NoiseGenerator::computePinkGain (sampleRate);
+    for (std::size_t i = 0; i < voices.size(); ++i)
+        voices[i].prepare (sampleRate, static_cast<std::uint32_t> (0x9E3779B9u * (i + 1)), pinkGain);
     reset();
 }
 
@@ -18,13 +19,13 @@ void VoiceManager::reset() noexcept
     nextAge = 0;
 }
 
-void VoiceManager::handleEvent (const Event& e) noexcept
+void VoiceManager::handleEvent (const Event& e, const VoiceParameters& params) noexcept
 {
     switch (e.type)
     {
         case EventType::NoteOn:
             if (e.value > 0.0f)
-                noteOn (e.note, e.channel, e.value);
+                noteOn (e.note, e.channel, e.value, params);
             else
                 noteOff (e.note, e.channel);
             break;
@@ -53,11 +54,11 @@ void VoiceManager::handleEvent (const Event& e) noexcept
     }
 }
 
-void VoiceManager::render (float* left, float* right, int numSamples) noexcept
+void VoiceManager::render (float* left, float* right, int numSamples, const VoiceParameters& params) noexcept
 {
     for (auto& v : voices)
         if (v.isActive())
-            v.render (left, right, numSamples);
+            v.render (left, right, numSamples, params);
 }
 
 int VoiceManager::activeVoiceCount() const noexcept
@@ -68,9 +69,9 @@ int VoiceManager::activeVoiceCount() const noexcept
     return n;
 }
 
-void VoiceManager::noteOn (int note, int channel, float velocity) noexcept
+void VoiceManager::noteOn (int note, int channel, float velocity, const VoiceParameters& params) noexcept
 {
-    chooseVoiceForNoteOn().start (note, channel, velocity, nextAge++);
+    chooseVoiceForNoteOn().start (note, channel, velocity, nextAge++, params);
 }
 
 void VoiceManager::noteOff (int note, int channel) noexcept

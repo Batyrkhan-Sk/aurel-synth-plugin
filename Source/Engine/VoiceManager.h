@@ -28,19 +28,20 @@ class VoiceManager
 public:
     static constexpr int kMaxVoices = 32;
 
-    void prepare (double sampleRate) noexcept;
+    /** Non-real-time. sampleRate is the internal (oversampled) rate. */
+    void prepare (double sampleRate);
     void reset() noexcept;
 
-    void handleEvent (const Event& e) noexcept;
+    void handleEvent (const Event& e, const VoiceParameters& params) noexcept;
 
     /** Adds all active voices into left/right. */
-    void render (float* left, float* right, int numSamples) noexcept;
+    void render (float* left, float* right, int numSamples, const VoiceParameters& params) noexcept;
 
     [[nodiscard]] int activeVoiceCount() const noexcept;
     [[nodiscard]] bool isSustainDown() const noexcept { return sustainDown; }
 
 private:
-    void noteOn (int note, int channel, float velocity) noexcept;
+    void noteOn (int note, int channel, float velocity, const VoiceParameters& params) noexcept;
     void noteOff (int note, int channel) noexcept;
     void setSustain (bool down) noexcept;
     Voice& chooseVoiceForNoteOn() noexcept;

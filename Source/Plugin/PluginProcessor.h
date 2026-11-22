@@ -4,6 +4,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <array>
 #include <atomic>
 #include <vector>
 
@@ -47,8 +48,29 @@ private:
         block is rendered in segments, so no event is ever dropped. */
     static constexpr std::size_t kEventCapacity = 2048;
 
+    /** Reads the cached atomics into the engine's plain parameter snapshot. */
+    [[nodiscard]] engine::EngineParameters readParameters() const noexcept;
+
+    struct OscillatorBinding
+    {
+        std::atomic<float>* wave = nullptr;
+        std::atomic<float>* octave = nullptr;
+        std::atomic<float>* semi = nullptr;
+        std::atomic<float>* fine = nullptr;
+        std::atomic<float>* pulseWidth = nullptr;
+        std::atomic<float>* level = nullptr;
+    };
+
     juce::AudioProcessorValueTreeState parameters;
     std::atomic<float>* masterVolume = nullptr;
+    std::array<OscillatorBinding, 3> oscillators {};
+    std::atomic<float>* osc2Sync = nullptr;
+    std::atomic<float>* osc2Fm = nullptr;
+    std::atomic<float>* subLevel = nullptr;
+    std::atomic<float>* subOctave = nullptr;
+    std::atomic<float>* subWave = nullptr;
+    std::atomic<float>* noiseLevel = nullptr;
+    std::atomic<float>* noiseColor = nullptr;
 
     engine::Engine engine;
     std::vector<engine::Event> events; // capacity reserved in the constructor

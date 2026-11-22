@@ -21,6 +21,7 @@
 #include <vector>
 
 #include <charconv>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <numbers>
@@ -40,8 +41,11 @@ struct Options
     std::uint16_t channels = 2;
     int note = 69;
     std::string wave = "saw";
-    std::string kernel = "polyblep2";
+    std::string kernel = "sinc6";
     double pulseWidth = 0.5;
+    double syncRatio = 0.0;
+    double fmDepth = 0.0;
+    double fmRatio = 1.0;
     std::string bench;
     std::string outPath;
 };
@@ -53,9 +57,12 @@ void printUsage()
         "       aurel_render --bench osc\n"
         "  --signal   sine | silence | note | osc (default sine)\n"
         "  --freq     Hz, sine / osc          (default 1000)\n"
-        "  --wave     sine | triangle | saw | pulse, osc only (default saw)\n"
-        "  --kernel   naive | polyblep2 | sinc4 | sinc6 | sinc8 | sinc12 (default polyblep2)\n"
+        "  --wave     sine | triangle | saw | pulse; osc, or OSC1 for note (default saw)\n"
+        "  --kernel   naive | polyblep2 | sinc4 | sinc6 | sinc8 | sinc12, osc only (default sinc6)\n"
         "  --pw       pulse width 0.01..0.99, osc only (default 0.5)\n"
+        "  --sync     slave/master frequency ratio, osc only (default 0 = off)\n"
+        "  --fm       through-zero FM depth by a sine modulator, osc only (default 0)\n"
+        "  --fm-ratio modulator/carrier frequency ratio (default 1)\n"
         "  --amp      sine: peak amplitude; note: velocity 0..1 (default 0.5)\n"
         "  --note     MIDI note, note only    (default 69)\n"
         "  --rate     sample rate in Hz       (default 48000)\n"
@@ -122,6 +129,9 @@ bool parseArgs (int argc, char** argv, Options& o)
         else if (key == "--wave")     o.wave = val;
         else if (key == "--kernel")   o.kernel = val;
         else if (key == "--pw")       ok = parseNumber (val, o.pulseWidth);
+        else if (key == "--sync")     ok = parseNumber (val, o.syncRatio);
+        else if (key == "--fm")       ok = parseNumber (val, o.fmDepth);
+        else if (key == "--fm-ratio") ok = parseNumber (val, o.fmRatio);
         else if (key == "--bench")    o.bench = val;
         else
             return false;
@@ -131,12 +141,13 @@ bool parseArgs (int argc, char** argv, Options& o)
     }
 
     if (! o.bench.empty())
-        return o.bench == "osc";
+        return o.bench == "osc" || o.bench == "engine";
 
     aurel::dsp::Waveform w {};
-    const bool oscOk = o.signal != "osc"
+    const bool oscOk = (o.signal != "osc" && o.signal != "note")
                     || (aurel::render::parseWaveform (o.wave, w) && aurel::render::isKnownKernel (o.kernel)
-                        && o.pulseWidth >= 0.01 && o.pulseWidth <= 0.99);
+                        && o.pulseWidth >= 0.01 && o.pulseWidth <= 0.99 && o.syncRatio >= 0.0
+                        && o.fmDepth >= 0.0 && o.fmRatio > 0.0);
 
     return ! o.outPath.empty() && oscOk
         && (o.signal == "sine" || o.signal == "silence" || o.signal == "note" || o.signal == "osc")
@@ -154,6 +165,7 @@ void renderEngineNote (const Options& o, aurel::tooling::AudioData& audio)
 
     aurel::engine::EngineParameters params;
     params.masterGainDb = 0.0f;
+    (void) aurel::render::parseWaveform (o.wave, params.voice.osc[0].waveform);
 
     aurel::engine::Event on;
     on.type = aurel::engine::EventType::NoteOn;
@@ -184,6 +196,56 @@ void renderEngineNote (const Options& o, aurel::tooling::AudioData& audio)
     }
 }
 
+/** CPU of the full engine at 48 kHz host / 512-sample blocks: N held notes,
+    every source on (3 saws/pulses + sub + pink noise, sync + FM). */
+int benchmarkEngine()
+{
+#ifndef NDEBUG
+    std::puts ("WARNING: debug build, timings are not meaningful. Use the Release build.");
+#endif
+    constexpr double rate = 48000.0;
+    constexpr int block = 512;
+    constexpr double seconds = 10.0;
+
+    aurel::engine::EngineParameters p;
+    for (auto& o : p.voice.osc)
+        o.level = 0.5f;
+    p.voice.osc[1].waveform = aurel::dsp::Waveform::Pulse;
+    p.voice.osc2Sync = true;
+    p.voice.osc2FmDepth = 1.0f;
+    p.voice.subLevel = 0.5f;
+    p.voice.noiseLevel = 0.2f;
+    p.voice.noiseColor = aurel::dsp::NoiseColor::Pink;
+
+    std::printf ("%-8s %14s %16s\n", "voices", "% of realtime", "% per voice");
+    for (const int voices : { 1, 8, 16, 32 })
+    {
+        aurel::engine::Engine engine;
+        engine.prepare (rate, block);
+        std::vector<aurel::engine::Event> on;
+        for (int v = 0; v < voices; ++v)
+        {
+            aurel::engine::Event e;
+            e.type = aurel::engine::EventType::NoteOn;
+            e.note = static_cast<std::uint8_t> (36 + v * 2); // C2 upward, up to ~C7
+            e.value = 0.8f;
+            on.push_back (e);
+        }
+        std::vector<float> l (block), r (block);
+        engine.process (on, l.data(), r.data(), block, p);
+
+        const auto blocks = static_cast<int> (seconds * rate / block);
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int b = 0; b < blocks; ++b)
+            engine.process ({}, l.data(), r.data(), block, p);
+        const auto t1 = std::chrono::steady_clock::now();
+
+        const double pct = 100.0 * std::chrono::duration<double> (t1 - t0).count() / seconds;
+        std::printf ("%-8d %14.2f %16.3f\n", voices, pct, pct / voices);
+    }
+    return 0;
+}
+
 } // namespace
 
 int main (int argc, char** argv)
@@ -197,6 +259,8 @@ int main (int argc, char** argv)
 
     if (opts.bench == "osc")
         return aurel::render::benchmarkOscillators();
+    if (opts.bench == "engine")
+        return benchmarkEngine();
 
     const aurel::dsp::ScopedFlushDenormals noDenormals;
 
@@ -225,11 +289,17 @@ int main (int argc, char** argv)
     }
     else if (opts.signal == "osc")
     {
-        aurel::dsp::Waveform w {};
-        (void) aurel::render::parseWaveform (opts.wave, w);
+        aurel::render::OscRenderOptions ro;
+        ro.kernel = opts.kernel;
+        (void) aurel::render::parseWaveform (opts.wave, ro.waveform);
+        ro.frequency = opts.frequency;
+        ro.pulseWidth = opts.pulseWidth;
+        ro.sampleRate = opts.sampleRate;
+        ro.syncRatio = opts.syncRatio;
+        ro.fmDepth = opts.fmDepth;
+        ro.fmRatio = opts.fmRatio;
         std::vector<float> mono (frames);
-        (void) aurel::render::renderOscillator (opts.kernel, w, opts.frequency, opts.pulseWidth,
-                                                opts.sampleRate, mono);
+        (void) aurel::render::renderOscillator (ro, mono);
         for (std::size_t n = 0; n < frames; ++n)
             for (std::uint16_t c = 0; c < opts.channels; ++c)
                 audio.interleaved[n * opts.channels + c] = mono[n];

@@ -3,7 +3,9 @@
 #include "DSP/Core/Denormals.h"
 
 #include <chrono>
+#include <cmath>
 #include <cstdio>
+#include <numbers>
 #include <vector>
 
 namespace aurel::render
@@ -52,20 +54,42 @@ bool parseWaveform (std::string_view name, dsp::Waveform& out)
     return false;
 }
 
-bool renderOscillator (std::string_view kernel, dsp::Waveform waveform, double frequency,
-                       double pulseWidth, double sampleRate, std::span<float> out)
+bool renderOscillator (const OscRenderOptions& o, std::span<float> out)
 {
-    return withKernel (kernel, [&]<class K>() {
-        BandlimitedOscillator<K> osc;
+    return withKernel (o.kernel, [&]<class K>() {
+        BandlimitedOscillator<K> osc, master;
         osc.prepare();
-        osc.setWaveform (waveform);
-        osc.setPulseWidth (pulseWidth);
-        const double inc = frequency / sampleRate;
+        master.prepare();
+        osc.setWaveform (o.waveform);
+        osc.setPulseWidth (o.pulseWidth);
+        osc.reset();
+        master.setWaveform (Waveform::Saw);
+        master.reset();
 
-        for (int i = 0; i < BandlimitedOscillator<K>::kLatency; ++i) // latency compensation
-            (void) osc.process (inc);
+        const double baseInc = o.frequency / o.sampleRate;
+        const bool synced = o.syncRatio > 0.0;
+        const double inc = synced ? baseInc * o.syncRatio : baseInc;
+        const double modInc = baseInc * o.fmRatio;
+        long long n = 0;
+
+        auto next = [&]() {
+            double syncAt = -1.0;
+            if (synced)
+            {
+                (void) master.process (baseInc);
+                syncAt = master.getWrapFraction();
+            }
+            double i = inc;
+            if (o.fmDepth > 0.0)
+                i *= 1.0 + o.fmDepth * std::sin (2.0 * std::numbers::pi * modInc * static_cast<double> (n));
+            ++n;
+            return osc.process (i, syncAt);
+        };
+
+        for (int k = 0; k < BandlimitedOscillator<K>::kLatency; ++k) // latency compensation
+            (void) next();
         for (auto& s : out)
-            s = osc.process (inc);
+            s = next();
     });
 }
 
@@ -92,6 +116,7 @@ int benchmarkOscillators()
                     osc.prepare();
                     osc.setWaveform (wave);
                     osc.setPulseWidth (0.3);
+                    osc.reset();
                     const double inc = freq / rate;
                     const auto t0 = std::chrono::steady_clock::now();
                     for (int i = 0; i < numSamples; ++i)

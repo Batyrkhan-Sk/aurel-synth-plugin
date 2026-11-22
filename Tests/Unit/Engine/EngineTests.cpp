@@ -59,12 +59,17 @@ namespace
         return p;
     }
 
+    /** OSC1 sine only, 0 dB master: the voice is a pure, measurable tone. */
     EngineParameters unityGain()
     {
         EngineParameters p;
         p.masterGainDb = 0.0f;
+        p.voice.osc[0].waveform = dsp::Waveform::Sine;
         return p;
     }
+
+    /** Below this an IIR decimator tail counts as silence (-160 dBFS). */
+    constexpr float kSilence = 1e-8f;
 } // namespace
 
 TEST_CASE ("Engine is silent with no notes", "[engine]")
@@ -95,7 +100,7 @@ TEST_CASE ("Engine output level follows velocity and master gain", "[engine]")
     CHECK_THAT (peakOf (full.left, 4800), Catch::Matchers::WithinRel (engine::Voice::kVelocityGain, 1e-3f));
 
     auto eng2 = makeEngine();
-    EngineParameters minus6;
+    EngineParameters minus6 = unityGain();
     minus6.masterGainDb = -6.0206f;
     const auto half = renderBlocks (eng2, { { 0, noteOn (69, 0.5f) } }, 9600, 256, minus6);
     CHECK_THAT (peakOf (half.left, 4800),
@@ -104,10 +109,50 @@ TEST_CASE ("Engine output level follows velocity and master gain", "[engine]")
 
 TEST_CASE ("Events are sample-accurate", "[engine]")
 {
-    auto eng = makeEngine();
-    const auto out = renderBlocks (eng, { { 1000, noteOn (69) } }, 2048, 512, unityGain());
-    CHECK (peakOf (out.left, 0, 1001) == 0.0f); // first sample at 1000 has phase 0
-    CHECK (out.left[1001] != 0.0f);
+    // Delaying the note by k host samples must delay the output by exactly
+    // k samples, bit for bit. Latency (kernel + decimator) is constant.
+    EngineParameters saw;
+    auto a = makeEngine();
+    const auto ref = renderBlocks (a, { { 1000, noteOn (57) } }, 4096, 512, saw);
+    CHECK (peakOf (ref.left, 0, 1000) == 0.0f); // nothing before the note
+    CHECK (peakOf (ref.left, 1000, 1016) > 0.0f); // starts within the latency
+
+    const int shift = GENERATE (1, 7, 64);
+    auto b = makeEngine();
+    const auto late = renderBlocks (b, { { 1000 + shift, noteOn (57) } }, 4096, 512, saw);
+    INFO ("shift " << shift);
+    CHECK (std::memcmp (ref.left.data(), late.left.data() + shift, sizeof (float) * (4096 - shift)) == 0);
+}
+
+TEST_CASE ("Engine runs voices at >= 88.2 kHz internally", "[engine][oversampling]")
+{
+    CHECK (Engine::oversamplingFactorFor (44100.0) == 2);
+    CHECK (Engine::oversamplingFactorFor (48000.0) == 2);
+    CHECK (Engine::oversamplingFactorFor (88200.0) == 1);
+    CHECK (Engine::oversamplingFactorFor (96000.0) == 1);
+    CHECK (Engine::oversamplingFactorFor (192000.0) == 1);
+    CHECK (Engine::oversamplingFactorFor (32000.0) == 4);
+    CHECK (Engine::oversamplingFactorFor (22050.0) == 4);
+
+    for (const double rate : { 22050.0, 32000.0, 44100.0, 48000.0, 88200.0, 96000.0, 176400.0, 192000.0 })
+    {
+        Engine e;
+        e.prepare (rate, 256);
+        INFO ("host rate " << rate);
+        CHECK (e.getInternalSampleRate() >= 88200.0 - 1.0);
+    }
+}
+
+TEST_CASE ("Engine pitch is exact at every host sample rate", "[engine][oversampling]")
+{
+    const double rate = GENERATE (32000.0, 44100.0, 48000.0, 88200.0, 96000.0, 176400.0, 192000.0);
+    Engine eng;
+    eng.prepare (rate, 512);
+    const auto total = static_cast<long long> (rate);
+    const auto out = renderBlocks (eng, { { 0, noteOn (69) } }, total, 512, unityGain());
+    const double cents = 1200.0 * std::log2 (measureFrequency (out.left, rate) / 440.0);
+    INFO ("rate " << rate << ": " << cents << " cents");
+    CHECK (std::abs (cents) < 0.01);
 }
 
 TEST_CASE ("Output is identical for any block segmentation", "[engine]")
@@ -162,9 +207,10 @@ TEST_CASE ("Note off releases and the voice ends in silence", "[engine][lifecycl
 {
     auto eng = makeEngine();
     const auto out = renderBlocks (eng, { { 0, noteOn (69) }, { 4800, noteOff (69) } },
-                                   4800 + kReleaseTail + 512, 256);
+                                   4800 + kReleaseTail + 4000, 256);
     CHECK (eng.activeVoiceCount() == 0);
-    CHECK (peakOf (out.left, static_cast<std::size_t> (4800 + kReleaseTail)) == 0.0f);
+    // The voice stops exactly; the decimator's IIR tail then decays below -160 dBFS.
+    CHECK (peakOf (out.left, static_cast<std::size_t> (4800 + kReleaseTail + 2000)) < kSilence);
 }
 
 TEST_CASE ("Overlapping same-key notes (FL Studio piano roll order)", "[engine][lifecycle]")
@@ -212,9 +258,10 @@ TEST_CASE ("All Notes Off releases, All Sound Off silences immediately", "[engin
 
     auto eng2 = makeEngine();
     const auto out = renderBlocks (eng2, { { 0, noteOn (60) }, { 1000, simple (EventType::AllSoundOff) } },
-                                   2000, 256);
+                                   4000, 256);
     CHECK (eng2.activeVoiceCount() == 0);
-    CHECK (peakOf (out.left, 1000) == 0.0f);
+    CHECK (peakOf (out.left, 1000 + 64) < 1e-3f);    // gone within ~1.3 ms (decimator ring-out)
+    CHECK (peakOf (out.left, 1000 + 2000) < kSilence);
 }
 
 TEST_CASE ("Voice stealing keeps the voice count bounded", "[engine][lifecycle]")
@@ -239,7 +286,7 @@ TEST_CASE ("Master gain changes are smoothed", "[engine]")
     auto eng = makeEngine();
     const auto on = noteOn (45); // 110 Hz: max per-sample slope of the sine is small
     std::vector<float> l (4800), r (4800);
-    EngineParameters p;
+    EngineParameters p = unityGain();
     p.masterGainDb = -60.0f;
     eng.process ({ &on, 1 }, l.data(), r.data(), 4800, p);
 
@@ -264,11 +311,27 @@ TEST_CASE ("Engine process path does not allocate", "[engine][rt-safety]")
     for (std::size_t i = 0; i < events.size(); ++i)
         events[i].sampleOffset = static_cast<int> (i * 300);
 
+    // Every source and modulation path active, with parameter changes mid-run.
+    EngineParameters p;
+    for (auto& o : p.voice.osc)
+        o.level = 0.5f;
+    p.voice.osc[1].waveform = dsp::Waveform::Pulse;
+    p.voice.osc[2].waveform = dsp::Waveform::Triangle;
+    p.voice.osc2Sync = true;
+    p.voice.osc2FmDepth = 2.0f;
+    p.voice.subLevel = 0.5f;
+    p.voice.noiseLevel = 0.5f;
+    p.voice.noiseColor = dsp::NoiseColor::Pink;
+
     std::size_t allocs = 0, frees = 0;
     {
         const ScopedAllocationCounter counter;
         for (int block = 0; block < 8; ++block)
-            eng.process (events, l.data(), r.data(), block == 3 ? 4096 : 256, {}); // includes chunking
+        {
+            p.voice.osc[0].waveform = block % 2 ? dsp::Waveform::Saw : dsp::Waveform::Pulse;
+            p.voice.subOctave = 1 + block % 2;
+            eng.process (events, l.data(), r.data(), block == 3 ? 4096 : 256, p); // includes chunking
+        }
         allocs = counter.allocations();
         frees = counter.deallocations();
     }
@@ -291,8 +354,10 @@ TEST_CASE ("MIDI fuzz: no stuck voices, output always finite and bounded", "[eng
     int maxActive = 0;
     bool heardSound = false;
 
-    const float bound = engine::Voice::kVelocityGain * engine::VoiceManager::kMaxVoices
-                        * dsp::decibelsToGain (EngineParameters {}.masterGainDb) + 1e-3f;
+    // Default patch: one saw per voice. 1.5x covers Gibbs overshoot (~1.18)
+    // plus the decimator's phase response reshaping the waveform.
+    const float bound = 1.5f * engine::Voice::kVelocityGain * engine::VoiceManager::kMaxVoices
+                        * dsp::decibelsToGain (EngineParameters {}.masterGainDb);
 
     auto check = [&] (int n) {
         for (int i = 0; i < n; ++i)
@@ -365,5 +430,5 @@ TEST_CASE ("MIDI fuzz: no stuck voices, output always finite and bounded", "[eng
 
     INFO ("seed " << seed);
     CHECK (eng.activeVoiceCount() == 0);
-    CHECK (peakOf (l) == 0.0f);
+    CHECK (peakOf (l) < kSilence);
 }

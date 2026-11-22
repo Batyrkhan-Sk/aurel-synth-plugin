@@ -44,7 +44,11 @@ Limitation: direct `malloc`/`free` calls are not intercepted.
 | `tests/test_metrics.py` (alias metric) | Ideal additive saw shows no alias (< −180 dBc) and exact harmonics; a planted −70 dBc alias is measured within 0.05 dB; content above 20 kHz is ignored |
 | `tests/test_oscillator_aliasing.py` | Production kernel (sinc6) worst in-band alias < −100 dBc and harmonic error < 0.1 dB at 88.2/96 kHz (saw, 10 % pulse, triangle; 440 Hz–C8); naive saw still detected as aliased |
 
-The full kernel comparison (`Scripts/analysis/oscillator_aliasing.py`) is a report generator, not a test; see [../dsp/oscillator-antialiasing.md](../dsp/oscillator-antialiasing.md).
+| `tests/test_m2b.py` | Complete engine (2× voice + decimator) alias < −110 dBc at 44.1/48 kHz; sync (saw/pulse/triangle) < −100 dBc; sine-carrier FM < −150 dBc; the two documented limitations (sine-slave sync, saw-carrier FM) must not regress |
+
+M2b C++ additions: `Unit/DSP/HalfbandTests.cpp` (decimator design validity, passband ±0.01 dB to 20 kHz, stopband < −100 dB, DC gain, stability), `Unit/DSP/SubNoiseTests.cpp` (sub locked to OSC1 at −1/−2 oct, exact sub sine, white-noise statistics and determinism, pink slope within ±0.5 dB of −3.01 dB/oct from 20 Hz to 20 kHz at 88.2/96/192 kHz, pink RMS = white RMS), and new cases in `OscillatorTests.cpp` and `EngineTests.cpp` (see [../dsp/oscillators-m2b.md](../dsp/oscillators-m2b.md)).
+
+The full kernel comparison (`Scripts/analysis/oscillator_aliasing.py`) and `Scripts/analysis/m2b_measurements.py` are report generators, not tests; see [../dsp/oscillator-antialiasing.md](../dsp/oscillator-antialiasing.md).
 
 ## Plugin validation (pluginval)
 
@@ -61,6 +65,7 @@ FL Studio only, see [fl-studio-checklist.md](fl-studio-checklist.md).
 | Milestone | Date | Result |
 |---|---|---|
 | M1 | 2026-11-22 | All checks passed (reported by the user; sustain-pedal check applies only with a pedal-equipped controller) |
+| M2 | 2026-11-22 | Checks 14–24 passed (reported by the user) |
 
 ### Measured baseline (M0, 2026-11-22)
 

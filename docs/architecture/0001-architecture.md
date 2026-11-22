@@ -160,7 +160,7 @@ Unit, integration, MIDI fuzz, regression (spectral/RMS fingerprints with toleran
 |---|---|---|---|
 | M0 | Foundation | One command configures, builds and tests | **Done** 2026-11-22 |
 | M1 | Minimal VST3 (poly sine, MIDI, APVTS) | pluginval passes; loads and plays in FL Studio | **Done** 2026-11-22: pluginval strictness 10 (Debug + Release); FL Studio checklist passed |
-| M2 | Measurement harness + oscillators | Naive aliasing detected; chosen method meets target; tuning < 0.1 cent | **M2a done** (kernel chosen: sinc6); M2b (sync, FM, sub, noise, mixer, 2× voice rate + decimator) next |
+| M2 | Measurement harness + oscillators | Naive aliasing detected; chosen method meets target; tuning < 0.1 cent | **Done** 2026-11-22: end-to-end alias ≤ −116.9 dBc, tuning < 0.01 cent ([M2b report](../dsp/oscillators-m2b.md)); FL Studio checklist passed. Open for M5: sine-sync / saw-FM aliasing at high notes |
 | M3 | Filters | Response, stability, self-oscillation targets; beats JUCE baselines on measured criteria | Planned |
 | M4 | Voices + modulation | Fuzz tests clean; click-free steals; playable checkpoint | Planned |
 | M5 | Quality + performance | Benchmark report; polyphony/oversampling decided from data | Planned |

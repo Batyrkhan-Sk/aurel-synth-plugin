@@ -2,7 +2,7 @@
 
 A virtual analog synthesizer plugin (VST3), built with C++20 and JUCE.
 
-**Status:** M1. A minimal VST3 instrument (polyphonic sine test voice, MIDI, one host parameter) builds and passes pluginval at strictness 10. It is not yet a usable synthesizer. Roadmap: [docs/architecture/0001-architecture.md](docs/architecture/0001-architecture.md).
+**Status:** M2. Three band-limited oscillators (sine/triangle/saw/pulse, sync, through-zero FM, PWM), sub-oscillator and noise, voices running at 2× with a half-band decimator. No filter or envelopes yet (M3/M4). Roadmap: [docs/architecture/0001-architecture.md](docs/architecture/0001-architecture.md).
 
 ## Quick start (Windows)
 

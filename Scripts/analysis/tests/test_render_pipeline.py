@@ -68,7 +68,7 @@ def test_engine_note_pitch_level_and_purity(tmp_path, rate, note):
     # M1 voice: sine with a 2 ms attack. Analyse after the attack so the
     # envelope's amplitude modulation is excluded.
     x, sr = render(tmp_path, signal="note", note=note, amp=1.0, rate=rate,
-                   seconds=1, channels=2)
+                   seconds=1, channels=2, wave="sine")
     assert np.array_equal(x[:, 0], x[:, 1])
     steady = x[int(0.05 * sr):, 0]
 

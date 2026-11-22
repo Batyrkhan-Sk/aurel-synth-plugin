@@ -1,11 +1,24 @@
 #pragma once
 
-// M1 voice: a sine oscillator with a fixed linear attack/release gate.
+// One synth voice at the internal (oversampled) rate:
 //
-// TEMPORARY: this exists to prove the MIDI -> voice -> host path. It is
-// replaced by the real oscillator/mixer/filter/ADSR voice in M2-M4. The note
-// lifecycle (start / release / steal / sustain flags) is the part that stays.
+//   OSC1 --+--> sync / FM --> OSC2 --+
+//          +--> SUB                  +--> MIXER --> gate envelope --> out (mono, added to L and R)
+//   OSC3 ----------------------------+
+//   NOISE ---------------------------+
+//
+// The gate envelope (fixed linear attack/release) is TEMPORARY until the
+// ADSRs arrive in M4. The note lifecycle (start / release / steal / sustain
+// flags) is permanent.
+//
+// Mixer headroom rule (ADR 0001, D2): every source has a fixed gain equal
+// to its level; there is no normalisation by the number of active sources.
+// One oscillator at level 1 always yields the same mixer output level.
 
+#include "DSP/Core/Smoother.h"
+#include "Engine/VoiceParameters.h"
+
+#include <array>
 #include <cstdint>
 
 namespace aurel::engine
@@ -18,21 +31,23 @@ public:
 
     static constexpr double kAttackSeconds = 0.002;
     static constexpr double kReleaseSeconds = 0.030;
+    static constexpr double kParameterRampSeconds = 0.020;
     static constexpr float kVelocityGain = 0.25f; // per-voice headroom for 32-voice sums
 
-    void prepare (double sampleRate) noexcept;
+    /** Non-real-time. pinkGain from NoiseGenerator::computePinkGain(). */
+    void prepare (double internalSampleRate, std::uint32_t noiseSeed, double pinkGain);
     void reset() noexcept; // -> Idle, silent
 
-    /** Starts (or retriggers / steals) the voice. When the voice is already
-        sounding, phase and envelope continue from their current values so
-        the waveform stays continuous (no step, no click). */
-    void start (int note, int channel, float velocity, std::uint64_t age) noexcept;
+    /** Starts, retriggers or steals the voice. A voice that was idle starts
+        all oscillators at phase 0 with the current parameters (no ramps);
+        a sounding voice continues its phases (no step, no click). */
+    void start (int note, int channel, float velocity, std::uint64_t age, const VoiceParameters& p) noexcept;
 
     /** Begins the release ramp. No-op unless Active. */
     void release() noexcept;
 
-    /** Adds this voice's output to left/right. */
-    void render (float* left, float* right, int numSamples) noexcept;
+    /** Adds this voice's output to left/right (internal rate). */
+    void render (float* left, float* right, int numSamples, const VoiceParameters& p) noexcept;
 
     [[nodiscard]] State getState() const noexcept { return state; }
     [[nodiscard]] bool isActive() const noexcept { return state != State::Idle; }
@@ -41,14 +56,28 @@ public:
     [[nodiscard]] std::uint64_t getAge() const noexcept { return age; }
 
     // Note-lifecycle flags, owned by VoiceManager.
-    bool keyDown = false;   // the key that started this voice is still held
-    bool sustained = false; // key released while the sustain pedal was down
+    bool keyDown = false;
+    bool sustained = false;
 
 private:
-    double sampleRate = 48000.0;
-    double phase = 0.0;          // cycles, [0, 1)
-    double phaseIncrement = 0.0; // cycles per sample
-    float level = 0.0f;
+    enum Source { Osc1, Osc2, Osc3, Sub, Noise, NumSources };
+
+    void applyDiscreteParameters (const VoiceParameters& p) noexcept;
+    void updateIncrements (const VoiceParameters& p) noexcept;
+    void setSmootherTargets (const VoiceParameters& p, bool jump) noexcept;
+
+    double sampleRate = 96000.0;
+
+    std::array<dsp::Oscillator, 3> osc {};
+    dsp::SubOscillator<dsp::OscillatorKernel> sub;
+    dsp::NoiseGenerator noise;
+
+    std::array<double, 3> increment {};
+    std::array<dsp::LinearSmoother, NumSources> level {};
+    std::array<dsp::LinearSmoother, 3> pulseWidth {};
+    dsp::LinearSmoother fmDepth;
+
+    float velocityLevel = 0.0f;
     float envelope = 0.0f;
     float attackStep = 0.0f;
     float releaseStep = 0.0f;
